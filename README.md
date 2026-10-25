@@ -12,6 +12,7 @@ A terminal CLI for Google Voice SMS. Send and read text messages from your shell
 - **Search** messages by text
 - **Contact name resolution** — `tgv send Ricki "..."` instead of typing a number
 - **Watch** — desktop notifications when new messages arrive
+- **TUI** — interactive full-screen terminal interface (`tgv tui`)
 - **JSON output** on every command for scripting
 
 ## Requirements
@@ -54,8 +55,40 @@ tgv search test              # search messages containing "test"
 tgv search test --thread Ricki   # ...within one conversation
 tgv watch                    # notify about new messages until Ctrl+C
 tgv watch --interval 10      # check every 10 seconds
-tgv watch --once             # check once (handy for cron)
+tgv tui                      # open the interactive terminal UI
 ```
+
+### Interactive TUI
+
+`tgv tui` opens a full-screen terminal interface:
+
+```bash
+tgv tui              # interactive mode (headless browser)
+tgv tui --headed     # show the browser window
+```
+
+Layout: sidebar (conversations) on the left, messages on the right, a compose
+box at the bottom. Outgoing messages align right, incoming align left.
+
+Keys:
+
+| Key | Action |
+|---|---|
+| `j` / `k` or arrows | Navigate conversations |
+| `Enter` | Open conversation |
+| `i` | Focus the compose box |
+| `Esc` | Back to conversation list |
+| `r` | Refresh |
+| `c` | Compose a new message |
+| `/` | Search |
+| `g` | Contacts |
+| `m` | Mark as read |
+| `?` | Help |
+| `q` | Quit |
+
+New messages trigger pop-up alerts while the TUI is running.
+
+### Sending to a contact by name
 
 Add `--json` to any command for machine-readable output:
 

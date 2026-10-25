@@ -1,1 +1,2 @@
 playwright>=1.55
+textual>=8.0

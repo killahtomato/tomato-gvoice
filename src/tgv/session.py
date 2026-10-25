@@ -60,6 +60,16 @@ def _new_context(playwright: Playwright, headless: bool) -> BrowserContext:
     raise last_error  # pragma: no cover - unreachable
 
 
+def launch_context(playwright: Playwright, headless: bool = True) -> BrowserContext:
+    """Public wrapper around _new_context for use by the TUI worker."""
+    return _new_context(playwright, headless=headless)
+
+
+def get_page(context: BrowserContext) -> Page:
+    """Public wrapper around _get_page for use by the TUI worker."""
+    return _get_page(context)
+
+
 def _get_page(context: BrowserContext) -> Page:
     pages = context.pages
     if pages:

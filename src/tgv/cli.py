@@ -177,6 +177,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="terminal to open clicked notifications in (default: auto-detect)",
     )
 
+    tui_cmd = sub.add_parser("tui", help="open the interactive terminal UI")
+    tui_cmd.add_argument(
+        "--headed", action="store_true", default=argparse.SUPPRESS,
+        help="run the browser in a visible window",
+    )
+    tui_cmd.add_argument(
+        "--interval", type=float, default=30.0, help="seconds between polls"
+    )
+
     return parser
 
 
@@ -199,6 +208,12 @@ def main(argv: list[str] | None = None) -> int:
             )
         except KeyboardInterrupt:
             pass
+        return 0
+
+    if args.command == "tui":
+        from . import tui as tui_module
+
+        tui_module.run_tui(headless=not args.headed, interval=args.interval)
         return 0
 
     try:
