@@ -45,6 +45,7 @@ tgv recent 24h               # messages in the last 24 hours
 tgv recent 7d --incoming     # only incoming messages
 tgv send "(717) 429-6075" "hello"
 tgv send Ricki "hello"       # send to a contact by name
+tgv send Ricki "hello" --dry-run   # preview resolution without sending
 tgv contacts                 # list known contacts
 tgv contacts Rick            # search contacts
 ```
@@ -81,6 +82,7 @@ re-fetch.
 |---|---|
 | `--headed` | Run the browser in a visible window instead of headless |
 | `--json` | Machine-readable output |
+| `--dry-run` | (send) Resolve the recipient and show where it would go without sending |
 | `--refresh` | (send/contacts) Re-fetch contacts instead of using the cache |
 
 ### Environment variables

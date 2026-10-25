@@ -129,6 +129,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     send.add_argument("recipient")
     send.add_argument("text")
+    send.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="resolve the recipient and show where it would go without sending",
+    )
     send.add_argument("--refresh", action="store_true", help="re-fetch contacts first")
     send.add_argument("--json", action="store_true")
 
@@ -179,17 +184,29 @@ def main(argv: list[str] | None = None) -> int:
                         f"No contact named {args.recipient!r}. "
                         "Try 'tgv contacts' to see known contacts."
                     )
-                sender.send(page, number, args.text)
-                if args.json:
-                    print(json.dumps({
-                        "sent": True,
-                        "to": number,
-                        "resolved_from": args.recipient,
-                    }))
-                elif kind == "contact":
-                    print(f"Sent to {args.recipient} ({number})")
+                if args.dry_run:
+                    if args.json:
+                        print(json.dumps({
+                            "dry_run": True,
+                            "to": number,
+                            "resolved_from": args.recipient,
+                        }))
+                    elif kind == "contact":
+                        print(f"Would send to {args.recipient} ({number})")
+                    else:
+                        print(f"Would send to {number}")
                 else:
-                    print(f"Sent to {number}")
+                    sender.send(page, number, args.text)
+                    if args.json:
+                        print(json.dumps({
+                            "sent": True,
+                            "to": number,
+                            "resolved_from": args.recipient,
+                        }))
+                    elif kind == "contact":
+                        print(f"Sent to {args.recipient} ({number})")
+                    else:
+                        print(f"Sent to {number}")
             elif args.command == "contacts":
                 known = contacts.load(page, refresh=args.refresh)
                 results = contacts.search(args.query, known)
