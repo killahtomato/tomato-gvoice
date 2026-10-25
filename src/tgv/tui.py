@@ -133,13 +133,6 @@ class ComposeBar(Horizontal):
     CLASS_REACT = False  # noqa
 
 
-class StatusBar(Static):
-    """A thin status line below the compose bar."""
-
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__("  Loading…", **kwargs)
-
-
 # --------------------------------------------------------------------------- #
 # Screens
 # --------------------------------------------------------------------------- #
@@ -366,7 +359,6 @@ class TuiApp(App):
     .thread-read { color: $text-muted; }
 
     #help { padding: 1 2; }
-    #status-bar { height: 1; padding: 0 1; color: $text-muted; background: $surface; }
     #search-input { margin: 1; }
     #search-results { height: 1fr; }
     #search-status { padding: 0 1; color: $text-muted; }
@@ -409,7 +401,6 @@ class TuiApp(App):
         with Vertical(id="conversation"):
             yield MessagePane(id="messages")
             yield ComposeBar(id="compose")
-            yield StatusBar(id="status-bar")
         yield Footer()
 
     # -- lifecycle --------------------------------------------------------- #
@@ -479,16 +470,6 @@ class TuiApp(App):
                 "title": thread.get("title"),
             })
         self.call_from_thread(self._set_messages, thread)
-        self.call_from_thread(self._update_status, index)
-
-    def _update_status(self, index: int) -> None:
-        if not self._threads or index >= len(self._threads):
-            return
-        thread = self._threads[index]
-        participant = _clean(thread.get("participant")) or "unknown"
-        total = thread.get("totalMessages", 0)
-        status = self.query_one("#status-bar", Static)
-        status.update(f"  {participant}  ·  {total} messages")
 
     def _set_messages(self, thread: dict) -> None:
         pane = self.query_one("#messages", MessagePane)
@@ -498,7 +479,6 @@ class TuiApp(App):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         self._selected = event.index
         self.load_thread(event.index)
-        self._update_status(event.index)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "compose-input":
