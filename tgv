@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# tgv - Tomato-gVoice launcher.
+set -euo pipefail
+
+# Resolve symlinks so this works when linked into ~/.local/bin.
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+
+export PYTHONPATH="$ROOT/src"
+exec "$ROOT/.venv/bin/python" -m tgv.cli "$@"
