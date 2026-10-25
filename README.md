@@ -9,6 +9,7 @@ A terminal CLI for Google Voice SMS. Send and read text messages from your shell
 - **Send SMS** from the terminal
 - **Read** conversations by index or name
 - **List** recent messages in a time window
+- **Contact name resolution** — `tgv send Ricki "..."` instead of typing a number
 - **JSON output** on every command for scripting
 
 ## Requirements
@@ -43,6 +44,9 @@ tgv read "Nanny T"           # ...or by name
 tgv recent 24h               # messages in the last 24 hours
 tgv recent 7d --incoming     # only incoming messages
 tgv send "(717) 429-6075" "hello"
+tgv send Ricki "hello"       # send to a contact by name
+tgv contacts                 # list known contacts
+tgv contacts Rick            # search contacts
 ```
 
 Add `--json` to any command for machine-readable output:
@@ -51,12 +55,33 @@ Add `--json` to any command for machine-readable output:
 tgv recent 30m --json
 ```
 
+### Sending to a contact by name
+
+`send` accepts a name as well as a phone number:
+
+```bash
+tgv send Ricki "are we still on for tonight?"
+```
+
+Names are matched exactly first, then by prefix, then by substring. If a name
+matches several contacts, `tgv` lists them instead of guessing:
+
+```
+$ tgv send Dad "hi"
+error: Multiple contacts match 'Dad': +17178775829, +17174337260
+```
+
+Known contacts come from your existing conversations plus your Google contact
+list, cached in `~/.config/tomato-gvoice/contacts.json`. Use `--refresh` to
+re-fetch.
+
 ### Options
 
 | Option | Description |
 |---|---|
 | `--headed` | Run the browser in a visible window instead of headless |
 | `--json` | Machine-readable output |
+| `--refresh` | (send/contacts) Re-fetch contacts instead of using the cache |
 
 ### Environment variables
 
@@ -64,6 +89,7 @@ tgv recent 30m --json
 |---|---|---|
 | `TGV_HOME` | `~/.config/tomato-gvoice` | Config directory |
 | `TGV_PROFILE_DIR` | `$TGV_HOME/chrome` | Browser profile (your login) |
+| `TGV_CONTACTS_CACHE` | `$TGV_HOME/contacts.json` | Cached contact map |
 | `TGV_CHROME` | auto-detected | Chromium executable to use |
 | `TGV_DEBUG` | unset | Print step-by-step send logs |
 
@@ -73,6 +99,7 @@ tgv recent 30m --json
 
 - **Reading** intercepts the web app's internal `api2thread/list` JSON and decodes it (falling back to the DOM for previews).
 - **Sending** drives the composer UI and waits for the real `sendsms` API response before reporting success.
+- **Contacts** are decoded from the thread payload (numbers) plus the DOM (display names and the full Google contact list), then cached.
 
 The signed-in session lives in `~/.config/tomato-gvoice/chrome` — treat it as a login.
 

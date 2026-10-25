@@ -9,7 +9,7 @@ import sys
 
 from playwright.sync_api import Error as PlaywrightError
 
-from . import reader, sender, session
+from . import contacts, reader, sender, session
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$")
 _UNIT_MS = {
@@ -83,6 +83,15 @@ def _print_recent(result: dict) -> None:
         )
 
 
+def _print_contacts(items: list[dict]) -> None:
+    if not items:
+        print("No contacts found.")
+        return
+    for item in items:
+        numbers = ", ".join(item.get("numbers", []))
+        print(f"{item.get('name', '?')}  {numbers}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tgv",
@@ -115,10 +124,20 @@ def build_parser() -> argparse.ArgumentParser:
     recent.add_argument("-n", "--limit", type=int, default=100)
     recent.add_argument("--json", action="store_true")
 
-    send = sub.add_parser("send", help="send a text message")
-    send.add_argument("phone")
+    send = sub.add_parser(
+        "send", help="send a text message to a phone number or contact name"
+    )
+    send.add_argument("recipient")
     send.add_argument("text")
+    send.add_argument("--refresh", action="store_true", help="re-fetch contacts first")
     send.add_argument("--json", action="store_true")
+
+    list_contacts = sub.add_parser("contacts", help="list or search known contacts")
+    list_contacts.add_argument("query", nargs="?", help="name to search for")
+    list_contacts.add_argument(
+        "--refresh", action="store_true", help="re-fetch instead of using the cache"
+    )
+    list_contacts.add_argument("--json", action="store_true")
 
     return parser
 
@@ -153,11 +172,28 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _emit(result, args.json, _print_recent)
             elif args.command == "send":
-                sender.send(page, args.phone, args.text)
+                known = contacts.load(page, refresh=args.refresh)
+                number, kind = contacts.resolve(args.recipient, known)
+                if number is None:
+                    raise session.VoiceError(
+                        f"No contact named {args.recipient!r}. "
+                        "Try 'tgv contacts' to see known contacts."
+                    )
+                sender.send(page, number, args.text)
                 if args.json:
-                    print(json.dumps({"sent": True, "to": args.phone}))
+                    print(json.dumps({
+                        "sent": True,
+                        "to": number,
+                        "resolved_from": args.recipient,
+                    }))
+                elif kind == "contact":
+                    print(f"Sent to {args.recipient} ({number})")
                 else:
-                    print(f"Sent to {args.phone}")
+                    print(f"Sent to {number}")
+            elif args.command == "contacts":
+                known = contacts.load(page, refresh=args.refresh)
+                results = contacts.search(args.query, known)
+                _emit(results, args.json, _print_contacts)
     except session.AuthenticationRequiredError as exc:
         print(str(exc), file=sys.stderr)
         return 2

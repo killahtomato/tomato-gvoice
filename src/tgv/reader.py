@@ -34,7 +34,7 @@ def _is_thread_list_response(response: Response) -> bool:
     return _first_thread_page_size(response.request) is not None
 
 
-def _capture_thread_list(page: Page, timeout_ms: int = 15_000) -> tuple[Any, int]:
+def capture_thread_list(page: Page, timeout_ms: int = 15_000) -> tuple[Any, int]:
     """Navigate to the inbox and capture the api2thread/list payload."""
     last_error: Exception | None = None
     for attempt in range(2):
@@ -54,7 +54,7 @@ def _capture_thread_list(page: Page, timeout_ms: int = 15_000) -> tuple[Any, int
     ) from last_error
 
 
-def _dom_participants(page: Page) -> list[str | None]:
+def dom_participants(page: Page) -> list[str | None]:
     return page.evaluate(
         """(sel) => {
             const clean = (v) => (v ? v.replace(/\\s+/g, ' ').trim() : null);
@@ -246,8 +246,8 @@ def recent(
     limit: int = 100,
 ) -> dict:
     """List individual messages in a recent time window, decoded from the API."""
-    payload, _page_size = _capture_thread_list(page)
-    participants = _dom_participants(page)
+    payload, _page_size = capture_thread_list(page)
+    participants = dom_participants(page)
     return decode_recent(
         payload,
         participants,
