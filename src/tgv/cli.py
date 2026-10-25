@@ -9,7 +9,7 @@ import sys
 
 from playwright.sync_api import Error as PlaywrightError
 
-from . import contacts, reader, sender, session
+from . import contacts, reader, sender, session, watch
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$")
 _UNIT_MS = {
@@ -92,6 +92,18 @@ def _print_contacts(items: list[dict]) -> None:
         print(f"{item.get('name', '?')}  {numbers}")
 
 
+def _print_search(messages: list[dict]) -> None:
+    if not messages:
+        print("No messages match.")
+        return
+    for msg in messages:
+        direction = ">>" if msg.get("direction") == "outgoing" else "<<"
+        print(
+            f"[{msg.get('timestamp')}] {direction} "
+            f"{clean(msg.get('participant')) or 'unknown'}: {clean(msg.get('text')) or ''}"
+        )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="tgv",
@@ -143,6 +155,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--refresh", action="store_true", help="re-fetch instead of using the cache"
     )
     list_contacts.add_argument("--json", action="store_true")
+
+    search = sub.add_parser("search", help="search messages by text")
+    search.add_argument("query", help="text to search for")
+    search.add_argument("--thread", help="limit results to a contact/thread name")
+    search.add_argument("-n", "--limit", type=int, default=100)
+    search.add_argument("--json", action="store_true")
+
+    watch_cmd = sub.add_parser(
+        "watch", help="notify about new messages until interrupted"
+    )
+    watch_cmd.add_argument(
+        "--interval", type=float, default=30.0, help="seconds between checks"
+    )
+    watch_cmd.add_argument("--once", action="store_true", help="check once and exit")
+    watch_cmd.add_argument(
+        "--json", action="store_true", help="print notifications as JSON"
+    )
 
     return parser
 
@@ -211,6 +240,15 @@ def main(argv: list[str] | None = None) -> int:
                 known = contacts.load(page, refresh=args.refresh)
                 results = contacts.search(args.query, known)
                 _emit(results, args.json, _print_contacts)
+            elif args.command == "search":
+                results = reader.search(
+                    page, args.query, thread_name=args.thread, limit=args.limit
+                )
+                _emit(results, args.json, _print_search)
+            elif args.command == "watch":
+                watch.watch(
+                    page, interval=args.interval, once=args.once, as_json=args.json
+                )
     except session.AuthenticationRequiredError as exc:
         print(str(exc), file=sys.stderr)
         return 2

@@ -66,40 +66,35 @@ def dom_participants(page: Page) -> list[str | None]:
     )
 
 
-def decode_recent(
+def decode_messages(
     payload: Any,
     participants: list[str | None],
     *,
     since_ms: int,
     incoming_only: bool = False,
-    limit: int = 100,
     now_ms: float | None = None,
-) -> dict:
-    """Decode the api2thread/list payload into a flat message list."""
+) -> list[dict]:
+    """Decode the api2thread/list payload into a flat message list.
+
+    Returned dicts carry an internal "_ts" (epoch ms) used for sorting and
+    de-duplication; callers strip it before returning data to the user.
+    Messages are sorted newest-first.
+    """
     now_ms = now_ms if now_ms is not None else time.time() * 1000
     cutoff = now_ms - since_ms
-    raw_threads = payload[0] if isinstance(payload, list) and payload and isinstance(payload[0], list) else []
+    raw_threads = (
+        payload[0]
+        if isinstance(payload, list) and payload and isinstance(payload[0], list)
+        else []
+    )
 
     messages: list[dict] = []
-    latest_thread_timestamps: list[float] = []
-
     for idx, thread in enumerate(raw_threads):
         raw_messages = (
             thread[2]
             if isinstance(thread, list) and len(thread) > 2 and isinstance(thread[2], list)
             else []
         )
-        latest_ts = next(
-            (
-                m[1]
-                for m in raw_messages
-                if isinstance(m, list) and len(m) > 1 and isinstance(m[1], (int, float))
-            ),
-            None,
-        )
-        if latest_ts is not None:
-            latest_thread_timestamps.append(latest_ts)
-
         for m in raw_messages:
             if not isinstance(m, list) or len(m) < 10:
                 continue
@@ -128,10 +123,56 @@ def decode_recent(
             )
 
     messages.sort(key=lambda m: m["_ts"], reverse=True)
-    selected = messages[:limit]
+    return messages
+
+
+def decode_recent(
+    payload: Any,
+    participants: list[str | None],
+    *,
+    since_ms: int,
+    incoming_only: bool = False,
+    limit: int = 100,
+    now_ms: float | None = None,
+) -> dict:
+    """Decode the api2thread/list payload into a flat message list."""
+    now_ms = now_ms if now_ms is not None else time.time() * 1000
+    raw_threads = (
+        payload[0]
+        if isinstance(payload, list) and payload and isinstance(payload[0], list)
+        else []
+    )
+
+    latest_thread_timestamps: list[float] = []
+    for thread in raw_threads:
+        raw_messages = (
+            thread[2]
+            if isinstance(thread, list) and len(thread) > 2 and isinstance(thread[2], list)
+            else []
+        )
+        latest_ts = next(
+            (
+                m[1]
+                for m in raw_messages
+                if isinstance(m, list) and len(m) > 1 and isinstance(m[1], (int, float))
+            ),
+            None,
+        )
+        if latest_ts is not None:
+            latest_thread_timestamps.append(latest_ts)
+
+    all_messages = decode_messages(
+        payload,
+        participants,
+        since_ms=since_ms,
+        incoming_only=incoming_only,
+        now_ms=now_ms,
+    )
+    selected = all_messages[:limit]
     for m in selected:
         del m["_ts"]
 
+    cutoff = now_ms - since_ms
     oldest_loaded = min(latest_thread_timestamps) if latest_thread_timestamps else None
     return {
         "count": len(selected),
@@ -144,9 +185,50 @@ def decode_recent(
             and oldest_loaded >= cutoff
             and len(raw_threads) >= 100
         ),
-        "truncated": len(messages) > len(selected),
+        "truncated": len(all_messages) > len(selected),
         "windowMs": since_ms,
     }
+
+
+def search(
+    page: Page,
+    query: str,
+    *,
+    thread_name: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """Case-insensitive substring search across the loaded threads."""
+    payload, _page_size = capture_thread_list(page)
+    participants = dom_participants(page)
+    messages = decode_messages(payload, participants, since_ms=365 * 86_400_000)
+    needle = query.lower()
+    thread_needle = thread_name.lower() if thread_name else None
+
+    out: list[dict] = []
+    for m in messages:
+        if needle not in m["text"].lower():
+            continue
+        if thread_needle and thread_needle not in (m.get("participant") or "").lower():
+            continue
+        out.append({k: v for k, v in m.items() if k != "_ts"})
+    return out[:limit]
+
+
+def messages_since(
+    page: Page,
+    since_ms: int,
+    *,
+    now_ms: float | None = None,
+) -> list[dict]:
+    """Return messages newer than an epoch-ms cutoff (oldest first).
+
+    Returned dicts include the internal "_ts" field.
+    """
+    payload, _page_size = capture_thread_list(page)
+    participants = dom_participants(page)
+    messages = decode_messages(payload, participants, since_ms=since_ms, now_ms=now_ms)
+    messages.reverse()
+    return messages
 
 
 def list_threads(page: Page, limit: int = 20) -> list[dict]:
