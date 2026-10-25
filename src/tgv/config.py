@@ -15,6 +15,9 @@ WATCH_STATE = Path(os.environ.get("TGV_WATCH_STATE", BASE_DIR / "watch_state.jso
 # Absolute path to the `tgv` launcher, used when opening a terminal.
 LAUNCHER = Path(__file__).resolve().parent.parent.parent / "tgv"
 
+# Wrapper script that opens the TUI, stopping the watch service first.
+OPEN_TUI = Path(os.environ.get("TGV_OPEN_TUI", Path.home() / ".local/bin/tgv-open-tui"))
+
 # How long the cached contact map is trusted before it is refetched.
 CONTACTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 

@@ -444,26 +444,32 @@ class TuiApp(App):
             )
 
     def _start_watch(self) -> None:
-        """Start the watch service when the TUI exits so notifications resume."""
-        # Build the command that clicking a notification runs: open the TUI.
+        """Start the watch service when the TUI exits so notifications resume.
+
+        Clicking a notification stops the watch (releasing the browser) and
+        opens the TUI.
+        """
         tgv = str(config.LAUNCHER)
-        terminal = watch.resolve_terminal()
-        if terminal:
-            name = terminal.split("/")[-1]
-            if name == "foot":
-                tui_cmd = [terminal, "--hold", tgv, "tui"]
-            elif name == "alacritty":
-                tui_cmd = [terminal, "-e", tgv, "tui"]
-            elif name == "kitty":
-                tui_cmd = [terminal, tgv, "tui"]
-            else:
-                tui_cmd = [terminal, tgv, "tui"]
-        else:
-            tui_cmd = [tgv, "tui"]
+        open_tui = str(config.OPEN_TUI)
 
         if shutil.which("systemctl"):
-            # Set the click-cmd via an env override file for the service.
-            # Simpler: start with --click-cmd passed directly.
+            # Update the service file's click-cmd via an override.
+            from pathlib import Path as _Path
+            override_dir = (
+                _Path.home() / ".config" / "systemd" / "user" / "tgv-watch.service.d"
+            )
+            override_dir.mkdir(parents=True, exist_ok=True)
+            (override_dir / "tui-click.conf").write_text(
+                "[Service]\n"
+                "ExecStart=\n"
+                f"ExecStart={tgv} watch --interval {int(self._interval)} "
+                f"--click-cmd {open_tui}\n"
+            )
+            subprocess.run(
+                ["systemctl", "--user", "daemon-reload"],
+                capture_output=True,
+                timeout=10,
+            )
             subprocess.run(
                 ["systemctl", "--user", "start", "tgv-watch"],
                 capture_output=True,
@@ -475,7 +481,7 @@ class TuiApp(App):
         subprocess.Popen(
             [sys.executable, "-m", "tgv.cli", "watch",
              "--interval", str(int(self._interval)),
-             "--click-cmd", *tui_cmd],
+             "--click-cmd", open_tui],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
