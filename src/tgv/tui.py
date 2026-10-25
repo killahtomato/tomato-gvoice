@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import queue
 import re
+import subprocess
 import threading
 import time
 from typing import Any, Callable
@@ -128,9 +129,7 @@ class ComposeBar(Horizontal):
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Type a message…", id="compose-input")
-        yield Static("i: type  Esc: list", classes="send-hint", id="compose-hint")
-
-    CLASS_REACT = False  # noqa
+        yield Static("i: type  Esc: list", classes="send-hint")
 
 
 # --------------------------------------------------------------------------- #
@@ -329,7 +328,7 @@ class TuiApp(App):
         padding: 0 1;
     }
 
-    #compose-input { width: 1fr; }
+    #compose Input { width: 1fr; }
 
     .send-hint { width: auto; padding: 1 1 0 0; color: $text-muted; }
 
@@ -398,9 +397,9 @@ class TuiApp(App):
         yield Header(show_clock=True)
         with Horizontal(id="main"):
             yield ThreadList(id="sidebar")
-        with Vertical(id="conversation"):
-            yield MessagePane(id="messages")
-            yield ComposeBar(id="compose")
+            with Vertical(id="conversation"):
+                yield MessagePane(id="messages")
+                yield ComposeBar()
         yield Footer()
 
     # -- lifecycle --------------------------------------------------------- #
@@ -446,7 +445,7 @@ class TuiApp(App):
         sidebar = self.query_one("#sidebar", ThreadList)
         sidebar.clear()
         for thread in threads:
-            marker = "*" if thread.get("unread") else " "
+            marker = "●" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
             label = f"{marker} {_clean(thread.get('participant')) or 'unknown'}\n     {preview}"
             sidebar.append(ListItem(Static(label)))
@@ -463,12 +462,6 @@ class TuiApp(App):
         except Exception as exc:  # noqa: BLE001
             self.call_from_thread(self.notify, str(exc), severity="error")
             return
-        # Merge loaded data (totalMessages, title) into the cached thread entry.
-        if index < len(self._threads):
-            self._threads[index].update({
-                "totalMessages": thread.get("totalMessages", 0),
-                "title": thread.get("title"),
-            })
         self.call_from_thread(self._set_messages, thread)
 
     def _set_messages(self, thread: dict) -> None:
