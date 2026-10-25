@@ -131,7 +131,16 @@ class ComposeBar(Horizontal):
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Type a message…", id="compose-input")
-        yield Static("i: type  Esc: list", classes="send-hint")
+        yield Static("i: type  Esc: list", classes="send-hint", id="compose-hint")
+
+    CLASS_REACT = False  # noqa
+
+
+class StatusBar(Static):
+    """A thin status line below the compose bar."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__("  Loading…", **kwargs)
 
 
 # --------------------------------------------------------------------------- #
@@ -330,7 +339,7 @@ class TuiApp(App):
         padding: 0 1;
     }
 
-    #compose Input { width: 1fr; }
+    #compose-input { width: 1fr; }
 
     .send-hint { width: auto; padding: 1 1 0 0; color: $text-muted; }
 
@@ -360,6 +369,7 @@ class TuiApp(App):
     .thread-read { color: $text-muted; }
 
     #help { padding: 1 2; }
+    #status-bar { height: 1; padding: 0 1; color: $text-muted; background: $surface; }
     #search-input { margin: 1; }
     #search-results { height: 1fr; }
     #search-status { padding: 0 1; color: $text-muted; }
@@ -399,9 +409,10 @@ class TuiApp(App):
         yield Header(show_clock=True)
         with Horizontal(id="main"):
             yield ThreadList(id="sidebar")
-            with Vertical(id="conversation"):
-                yield MessagePane(id="messages")
-                yield ComposeBar()
+        with Vertical(id="conversation"):
+            yield MessagePane(id="messages")
+            yield ComposeBar(id="compose")
+            yield StatusBar(id="status-bar")
         yield Footer()
 
     # -- lifecycle --------------------------------------------------------- #
@@ -503,7 +514,7 @@ class TuiApp(App):
         sidebar = self.query_one("#sidebar", ThreadList)
         sidebar.clear()
         for thread in threads:
-            marker = "●" if thread.get("unread") else " "
+            marker = "*" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
             label = f"{marker} {_clean(thread.get('participant')) or 'unknown'}\n     {preview}"
             sidebar.append(ListItem(Static(label)))
@@ -520,7 +531,23 @@ class TuiApp(App):
         except Exception as exc:  # noqa: BLE001
             self.call_from_thread(self.notify, str(exc), severity="error")
             return
+        # Merge loaded data (totalMessages, title) into the cached thread entry.
+        if index < len(self._threads):
+            self._threads[index].update({
+                "totalMessages": thread.get("totalMessages", 0),
+                "title": thread.get("title"),
+            })
         self.call_from_thread(self._set_messages, thread)
+        self.call_from_thread(self._update_status, index)
+
+    def _update_status(self, index: int) -> None:
+        if not self._threads or index >= len(self._threads):
+            return
+        thread = self._threads[index]
+        participant = _clean(thread.get("participant")) or "unknown"
+        total = thread.get("totalMessages", 0)
+        status = self.query_one("#status-bar", Static)
+        status.update(f"  {participant}  ·  {total} messages")
 
     def _set_messages(self, thread: dict) -> None:
         pane = self.query_one("#messages", MessagePane)
@@ -530,6 +557,7 @@ class TuiApp(App):
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         self._selected = event.index
         self.load_thread(event.index)
+        self._update_status(event.index)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "compose-input":
