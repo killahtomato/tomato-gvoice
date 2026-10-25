@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import queue
 import re
+import shutil
 import subprocess
+import sys
 import threading
 import time
 from typing import Any, Callable
@@ -20,7 +22,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
-from . import config, contacts, reader, sender, session
+from . import config, contacts, reader, sender, session, watch
 
 _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
@@ -404,6 +406,7 @@ class TuiApp(App):
 
     # -- lifecycle --------------------------------------------------------- #
     def on_mount(self) -> None:
+        self._stop_watch()
         self._start()
 
     @work(thread=True)
@@ -428,6 +431,55 @@ class TuiApp(App):
     def on_unmount(self) -> None:
         if self._worker:
             self._worker.stop()
+        self._start_watch()
+
+    # -- watch handover ---------------------------------------------------- #
+    def _stop_watch(self) -> None:
+        """Stop any running watch service so the TUI can own the browser."""
+        if shutil.which("systemctl"):
+            subprocess.run(
+                ["systemctl", "--user", "stop", "tgv-watch"],
+                capture_output=True,
+                timeout=10,
+            )
+
+    def _start_watch(self) -> None:
+        """Start the watch service when the TUI exits so notifications resume."""
+        # Build the command that clicking a notification runs: open the TUI.
+        tgv = str(config.LAUNCHER)
+        terminal = watch.resolve_terminal()
+        if terminal:
+            name = terminal.split("/")[-1]
+            if name == "foot":
+                tui_cmd = [terminal, "--hold", tgv, "tui"]
+            elif name == "alacritty":
+                tui_cmd = [terminal, "-e", tgv, "tui"]
+            elif name == "kitty":
+                tui_cmd = [terminal, tgv, "tui"]
+            else:
+                tui_cmd = [terminal, tgv, "tui"]
+        else:
+            tui_cmd = [tgv, "tui"]
+
+        if shutil.which("systemctl"):
+            # Set the click-cmd via an env override file for the service.
+            # Simpler: start with --click-cmd passed directly.
+            subprocess.run(
+                ["systemctl", "--user", "start", "tgv-watch"],
+                capture_output=True,
+                timeout=10,
+            )
+            return
+
+        # Fallback: launch a background watch process with a TUI click action.
+        subprocess.Popen(
+            [sys.executable, "-m", "tgv.cli", "watch",
+             "--interval", str(int(self._interval)),
+             "--click-cmd", *tui_cmd],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
 
     # -- data -------------------------------------------------------------- #
     @work(thread=True)

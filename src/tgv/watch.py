@@ -94,15 +94,26 @@ def _send_notification(
     args: list[str],
     thread: int | None,
     terminal: str | None,
+    click_cmd: list[str] | None = None,
 ) -> None:
-    """Run a blocking notify-send and open the thread if its action is chosen."""
+    """Run a blocking notify-send and run the click action if chosen."""
     proc = subprocess.run(args, capture_output=True, text=True)
-    # Daemons without the exec-argv hint report the "default" action instead.
-    if proc.stdout.strip() == "default":
+    action = proc.stdout.strip()
+    if action == "default" and click_cmd:
+        try:
+            subprocess.Popen(click_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except OSError:
+            pass
+    elif action == "default":
         _open_terminal(thread, terminal)
 
 
-def _notify(message: dict, as_json: bool, terminal: str | None) -> None:
+def _notify(
+    message: dict,
+    as_json: bool,
+    terminal: str | None,
+    click_cmd: list[str] | None = None,
+) -> None:
     sender = _clean(message.get("participant")) or "unknown"
     text = _clean(message.get("text"))
     if as_json:
@@ -122,14 +133,14 @@ def _notify(message: dict, as_json: bool, terminal: str | None) -> None:
     # Two click paths, whichever the daemon supports:
     #  - Omarchy/quickshell runs the `omarchy-exec-argv` hint directly.
     #  - Standard daemons invoke the libnotify "default" action (sender is live).
-    cmd = _terminal_command(terminal, thread) if (terminal and thread) else None
+    cmd = click_cmd or (_terminal_command(terminal, thread) if (terminal and thread) else None)
     args = ["notify-send", "--wait", "-t", "0", "-a", "tgv"]
     if cmd:
         args += ["-h", f"string:omarchy-exec-argv:{json.dumps(cmd)}"]
     args += ["-A", "default=Open in terminal", title, text]
     threading.Thread(
         target=_send_notification,
-        args=(args, thread, terminal),
+        args=(args, thread, terminal, click_cmd),
         daemon=True,
     ).start()
 
@@ -141,12 +152,13 @@ def watch(
     as_json: bool,
     headless: bool = True,
     terminal: str | None = None,
+    click_cmd: list[str] | None = None,
 ) -> None:
     """Poll for new messages and notify about them until interrupted.
 
     The browser is launched and closed for each poll so the profile is not held
     open, letting other tgv commands run between checks. Clicking a
-    notification opens the thread in a terminal.
+    notification runs ``click_cmd`` (default: open the thread in a terminal).
     """
     last_ts = _load_state()
     seeded = last_ts > 0
@@ -171,7 +183,7 @@ def watch(
                     since_ms = max(1.0, now_ms - last_ts)
                     messages = reader.messages_since(page, since_ms=since_ms, now_ms=now_ms)
                     for m in messages:
-                        _notify(m, as_json, terminal)
+                        _notify(m, as_json, terminal, click_cmd=click_cmd)
                     if messages:
                         last_ts = max(m["_ts"] for m in messages)
                         _save_state(last_ts)

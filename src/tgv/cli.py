@@ -176,6 +176,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--terminal",
         help="terminal to open clicked notifications in (default: auto-detect)",
     )
+    watch_cmd.add_argument(
+        "--click-cmd",
+        nargs="+",
+        help="command to run when a notification is clicked (default: open thread in terminal)",
+    )
 
     tui_cmd = sub.add_parser("tui", help="open the interactive terminal UI")
     tui_cmd.add_argument(
@@ -205,6 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                 as_json=args.json,
                 headless=not args.headed,
                 terminal=args.terminal,
+                click_cmd=args.click_cmd,
             )
         except KeyboardInterrupt:
             pass

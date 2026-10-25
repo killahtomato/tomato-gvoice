@@ -128,32 +128,27 @@ tgv search test --json
 
 ### Watching for new messages
 
-`watch` polls your inbox and sends a desktop notification for each new message:
+`watch` polls your inbox and sends a desktop notification for each new message. When the TUI is **not** running, it keeps you notified in the background.
 
 ```bash
-tgv watch                 # every 30s, until Ctrl+C
-tgv watch --interval 10   # check every 10s
-tgv watch --once          # single check (for cron)
-tgv watch --json          # print notifications instead of a popup
+tgv tui                  # open the interactive UI (stops the watcher while it runs)
+tgv watch                # notify every 30s until Ctrl+C
+tgv watch --interval 10  # check every 10s
+tgv watch --once         # single check (for cron)
+tgv watch --json         # print notifications instead of a popup
 ```
 
-Each notification is clickable — click it to open the conversation in a
-terminal (`foot --hold tgv read <n>`). Override the terminal with `--terminal`
-or `TGV_TERMINAL`.
-
-The first run seeds the state to "now", so old messages don't trigger a flood.
-Notifications use `notify-send` when available, falling back to terminal output.
+When the TUI exits, it automatically starts the `tgv-watch` service so notifications resume. Clicking a notification reopens the TUI.
 
 #### Running it in the background
 
-`tgv watch` blocks the terminal while it runs. To keep it running without a
-dedicated terminal, install the systemd user service:
+To have notifications running all the time (even when the TUI is closed), install the systemd user service:
 
 ```bash
 systemctl --user enable --now tgv-watch
 ```
 
-This starts on login and restarts on failure. Manage it with:
+This starts on login and restarts on failure. When you open `tgv tui`, the service is automatically stopped (so the TUI can use the browser); when you quit the TUI, the service restarts. Manage it with:
 
 ```bash
 systemctl --user status tgv-watch
@@ -174,6 +169,7 @@ The service lives at `~/.config/systemd/user/tgv-watch.service`.
 | `--thread` | (search) Limit results to a contact/thread name |
 | `--interval` | (watch) Seconds between checks (default 30) |
 | `--once` | (watch) Check once and exit |
+| `--click-cmd` | (watch) Command to run when a notification is clicked |
 | `--terminal` | (watch) Terminal to open clicked notifications in |
 
 ### Environment variables
