@@ -314,15 +314,16 @@ class TuiApp(App):
 
     #sidebar ListView { height: 1fr; }
 
-    #conversation { width: 1fr; }
+    #conversation { width: 1fr; layout: grid; grid-rows: 2fr 1fr; grid-gutter: 0; }
 
     #messages {
-        height: 1fr;
+        row-span: 1;
         overflow-y: auto;
         padding: 0 1;
     }
 
     #compose {
+        row-span: 1;
         height: auto;
         border-top: solid $primary;
         padding: 0 1;
