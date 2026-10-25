@@ -9,9 +9,6 @@ from __future__ import annotations
 
 import queue
 import re
-import shutil
-import subprocess
-import sys
 import threading
 import time
 from typing import Any, Callable
@@ -22,7 +19,7 @@ from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
-from . import config, contacts, reader, sender, session, watch
+from . import config, contacts, reader, sender, session
 
 _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
@@ -417,7 +414,6 @@ class TuiApp(App):
 
     # -- lifecycle --------------------------------------------------------- #
     def on_mount(self) -> None:
-        self._stop_watch()
         self._start()
 
     @work(thread=True)
@@ -442,6 +438,7 @@ class TuiApp(App):
     def on_unmount(self) -> None:
         if self._worker:
             self._worker.stop()
+<<<<<<< HEAD
         self._start_watch()
 
     # -- watch handover ---------------------------------------------------- #
@@ -497,6 +494,8 @@ class TuiApp(App):
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
+=======
+>>>>>>> 161a1a8 (Watch: always-running with 5-min poll window and persistent dedup)
 
     # -- data -------------------------------------------------------------- #
     @work(thread=True)

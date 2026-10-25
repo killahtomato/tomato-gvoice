@@ -16,6 +16,7 @@ from playwright.sync_api import Error as PlaywrightError
 from . import config, reader, session
 
 _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
+_POLL_WINDOW_MS = 5 * 60 * 1000  # look back 5 minutes on every poll
 
 TERMINAL_CANDIDATES = (
     os.environ.get("TGV_TERMINAL"),
@@ -73,19 +74,21 @@ def _open_terminal(thread: int | None, terminal: str | None) -> None:
         pass
 
 
-def _load_state() -> float:
-    """Return the last-seen timestamp (epoch ms), or 0 if none."""
+def _load_state() -> set[str]:
+    """Return the set of message IDs we've already notified about."""
     try:
         data = json.loads(config.WATCH_STATE.read_text(encoding="utf-8"))
-        return float(data.get("last_timestamp", 0))
+        return set(data.get("notified_ids", []))
     except (OSError, ValueError):
-        return 0.0
+        return set()
 
 
-def _save_state(ts: float) -> None:
+def _save_state(notified: set[str]) -> None:
+    # Keep the set bounded so the file doesn't grow forever.
+    recent = sorted(notified)[-1000:]
     config.WATCH_STATE.parent.mkdir(parents=True, exist_ok=True)
     config.WATCH_STATE.write_text(
-        json.dumps({"last_timestamp": ts, "updated": time.time()}),
+        json.dumps({"notified_ids": recent, "updated": time.time()}),
         encoding="utf-8",
     )
 
@@ -130,9 +133,6 @@ def _notify(
         print(f"{title}\n  {text}", file=sys.stderr)
         return
 
-    # Two click paths, whichever the daemon supports:
-    #  - Omarchy/quickshell runs the `omarchy-exec-argv` hint directly.
-    #  - Standard daemons invoke the libnotify "default" action (sender is live).
     cmd = click_cmd or (_terminal_command(terminal, thread) if (terminal and thread) else None)
     args = ["notify-send", "--wait", "-t", "0", "-a", "tgv"]
     if cmd:
@@ -143,6 +143,12 @@ def _notify(
         args=(args, thread, terminal, click_cmd),
         daemon=True,
     ).start()
+
+
+def _is_profile_locked(exc: BaseException) -> bool:
+    """True when the browser profile is in use by another process."""
+    text = str(exc).lower()
+    return "processsingleton" in text or "profile" in text and "lock" in text
 
 
 def watch(
@@ -156,37 +162,44 @@ def watch(
 ) -> None:
     """Poll for new messages and notify about them until interrupted.
 
-    The browser is launched and closed for each poll so the profile is not held
-    open, letting other tgv commands run between checks. Clicking a
-    notification runs ``click_cmd`` (default: open the thread in a terminal).
+    Every poll looks back a fixed window (5 minutes) so messages aren't missed
+    due to poll timing. Notifications are deduped by message ID, persisted
+    across restarts. Clicking a notification runs ``click_cmd`` (default: open
+    the thread in a terminal).
     """
-    last_ts = _load_state()
-    seeded = last_ts > 0
     terminal = resolve_terminal(terminal)
+    notified = _load_state()
     print(
         f"Watching for new messages every {interval:g}s (Ctrl+C to stop).",
         file=sys.stderr,
     )
 
     while True:
+        now_ms = time.time() * 1000
         try:
             with session.browser(headless=headless) as page:
-                now_ms = time.time() * 1000
-                if not seeded:
-                    # Seed to the newest message so old ones don't spam us.
-                    messages = reader.messages_since(page, since_ms=0, now_ms=now_ms)
-                    last_ts = max((m["_ts"] for m in messages), default=now_ms)
-                    _save_state(last_ts)
-                    seeded = True
-                    print(f"Seeded at {last_ts:.0f}; watching from now.", file=sys.stderr)
-                else:
-                    since_ms = max(1.0, now_ms - last_ts)
-                    messages = reader.messages_since(page, since_ms=since_ms, now_ms=now_ms)
-                    for m in messages:
-                        _notify(m, as_json, terminal, click_cmd=click_cmd)
-                    if messages:
-                        last_ts = max(m["_ts"] for m in messages)
-                        _save_state(last_ts)
+                messages = reader.messages_since(
+                    page, since_ms=_POLL_WINDOW_MS, now_ms=now_ms
+                )
+                new_messages = []
+                for m in messages:
+                    msg_id = m.get("id")
+                    if msg_id and msg_id in notified:
+                        continue
+                    new_messages.append(m)
+                    if msg_id:
+                        notified.add(msg_id)
+
+                for m in new_messages:
+                    _notify(m, as_json, terminal, click_cmd=click_cmd)
+                if new_messages:
+                    print(
+                        f"Notified about {len(new_messages)} message(s).",
+                        file=sys.stderr,
+                    )
+
+                if new_messages:
+                    _save_state(notified)
         except KeyboardInterrupt:
             break
         except session.AuthenticationRequiredError:
@@ -196,9 +209,14 @@ def watch(
                 file=sys.stderr,
             )
         except PlaywrightError as exc:
-            message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
-            print(f"watch stopped: {message}", file=sys.stderr)
-            break
+            if _is_profile_locked(exc):
+                # The profile is in use by the TUI or another tgv process;
+                # skip this poll and try again after the interval.
+                print("Profile in use; skipping this poll.", file=sys.stderr)
+            else:
+                message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
+                print(f"watch stopped: {message}", file=sys.stderr)
+                break
 
         if once:
             break
