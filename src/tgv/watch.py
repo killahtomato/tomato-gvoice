@@ -48,15 +48,16 @@ def resolve_terminal(explicit: str | None = None) -> str | None:
 
 def _terminal_command(terminal: str, thread: int) -> list[str]:
     name = os.path.basename(terminal)
+    tgv = str(config.LAUNCHER)
     if name == "foot":
-        return [terminal, "--hold", "tgv", "read", str(thread)]
+        return [terminal, "--hold", tgv, "read", str(thread)]
     if name == "alacritty":
-        return [terminal, "--hold", "-e", "tgv", "read", str(thread)]
+        return [terminal, "--hold", "-e", tgv, "read", str(thread)]
     if name == "kitty":
-        return [terminal, "tgv", "read", str(thread)]
+        return [terminal, tgv, "read", str(thread)]
     if name == "wezterm":
-        return [terminal, "start", "--", "tgv", "read", str(thread)]
-    return [terminal, "tgv", "read", str(thread)]
+        return [terminal, "start", "--", tgv, "read", str(thread)]
+    return [terminal, tgv, "read", str(thread)]
 
 
 def _open_terminal(thread: int | None, terminal: str | None) -> None:
@@ -91,13 +92,13 @@ def _save_state(ts: float) -> None:
 
 def _send_notification(
     args: list[str],
-    action_key: str,
     thread: int | None,
     terminal: str | None,
 ) -> None:
     """Run a blocking notify-send and open the thread if its action is chosen."""
     proc = subprocess.run(args, capture_output=True, text=True)
-    if proc.stdout.strip() == action_key:
+    # Daemons without the exec-argv hint report the "default" action instead.
+    if proc.stdout.strip() == "default":
         _open_terminal(thread, terminal)
 
 
@@ -117,15 +118,18 @@ def _notify(message: dict, as_json: bool, terminal: str | None) -> None:
     if not shutil.which("notify-send"):
         print(f"{title}\n  {text}", file=sys.stderr)
         return
-    # A per-message action key lets us tell which notification was clicked.
-    action_key = f"open-{thread}"
-    args = [
-        "notify-send", "--wait", "-t", "0", "-a", "tgv",
-        "-A", f"{action_key}=Open in terminal", title, text,
-    ]
+
+    # Two click paths, whichever the daemon supports:
+    #  - Omarchy/quickshell runs the `omarchy-exec-argv` hint directly.
+    #  - Standard daemons invoke the libnotify "default" action (sender is live).
+    cmd = _terminal_command(terminal, thread) if (terminal and thread) else None
+    args = ["notify-send", "--wait", "-t", "0", "-a", "tgv"]
+    if cmd:
+        args += ["-h", f"string:omarchy-exec-argv:{json.dumps(cmd)}"]
+    args += ["-A", "default=Open in terminal", title, text]
     threading.Thread(
         target=_send_notification,
-        args=(args, action_key, thread, terminal),
+        args=(args, thread, terminal),
         daemon=True,
     ).start()
 
@@ -174,8 +178,11 @@ def watch(
         except KeyboardInterrupt:
             break
         except session.AuthenticationRequiredError:
-            print("Session expired. Run `tgv login` again.", file=sys.stderr)
-            break
+            # Don't exit: keep polling so the watcher recovers after a re-login.
+            print(
+                "Session expired. Run `tgv login` again; will keep retrying.",
+                file=sys.stderr,
+            )
         except PlaywrightError as exc:
             message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
             print(f"watch stopped: {message}", file=sys.stderr)

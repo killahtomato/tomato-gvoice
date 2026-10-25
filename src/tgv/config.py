@@ -12,6 +12,9 @@ PROFILE_DIR = Path(os.environ.get("TGV_PROFILE_DIR", BASE_DIR / "chrome"))
 CONTACTS_CACHE = Path(os.environ.get("TGV_CONTACTS_CACHE", BASE_DIR / "contacts.json"))
 WATCH_STATE = Path(os.environ.get("TGV_WATCH_STATE", BASE_DIR / "watch_state.json"))
 
+# Absolute path to the `tgv` launcher, used when opening a terminal.
+LAUNCHER = Path(__file__).resolve().parent.parent.parent / "tgv"
+
 # How long the cached contact map is trusted before it is refetched.
 CONTACTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 

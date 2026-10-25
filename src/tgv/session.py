@@ -75,18 +75,30 @@ def navigate_to_messages(page: Page) -> None:
         page.wait_for_load_state("networkidle", timeout=2_000)
     except PlaywrightError:
         pass
-    page.wait_for_timeout(1_500)
+    # Wait for the URL to stop changing so we don't read it mid-redirect.
+    last_url: str | None = None
+    for _ in range(10):
+        current = page.url
+        if current == last_url:
+            break
+        last_url = current
+        page.wait_for_timeout(300)
 
 
 def is_authenticated(page: Page) -> bool:
-    """Return True when the current page shows the signed-in Voice app."""
-    navigate_to_messages(page)
-    parsed = urlsplit(page.url)
-    if parsed.hostname != "voice.google.com":
-        return False
-    if parsed.path.startswith("/landing"):
-        return False
-    return True
+    """Return True when the current page shows the signed-in Voice app.
+
+    The redirect can be slow on a cold launch, so retry a few times before
+    concluding the session is gone.
+    """
+    for attempt in range(3):
+        navigate_to_messages(page)
+        parsed = urlsplit(page.url)
+        if parsed.hostname == "voice.google.com" and not parsed.path.startswith("/landing"):
+            return True
+        if attempt < 2:
+            page.wait_for_timeout(1_500)
+    return False
 
 
 @contextmanager

@@ -104,9 +104,9 @@ tgv watch --once          # single check (for cron)
 tgv watch --json          # print notifications instead of a popup
 ```
 
-Each notification has an **Open in terminal** button — click it to open the
-conversation in a terminal (`foot --hold tgv read <n>`). Override the terminal
-with `--terminal` or `TGV_TERMINAL`.
+Each notification is clickable — click it to open the conversation in a
+terminal (`foot --hold tgv read <n>`). Override the terminal with `--terminal`
+or `TGV_TERMINAL`.
 
 The first run seeds the state to "now", so old messages don't trigger a flood.
 Notifications use `notify-send` when available, falling back to terminal output.

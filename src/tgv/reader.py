@@ -220,13 +220,20 @@ def messages_since(
     *,
     now_ms: float | None = None,
 ) -> list[dict]:
-    """Return messages newer than an epoch-ms cutoff (oldest first).
+    """Return messages strictly newer than an epoch-ms cutoff (oldest first).
 
-    Returned dicts include the internal "_ts" field.
+    The comparison is exclusive so the last-seen message isn't returned again
+    on the next poll. Returned dicts include the internal "_ts" field.
     """
     payload, _page_size = capture_thread_list(page)
     participants = dom_participants(page)
-    messages = decode_messages(payload, participants, since_ms=since_ms, now_ms=now_ms)
+    now_ms = now_ms if now_ms is not None else time.time() * 1000
+    cutoff = now_ms - since_ms
+    messages = [
+        m
+        for m in decode_messages(payload, participants, since_ms=since_ms, now_ms=now_ms)
+        if m["_ts"] > cutoff
+    ]
     messages.reverse()
     return messages
 
