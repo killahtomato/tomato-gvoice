@@ -438,64 +438,6 @@ class TuiApp(App):
     def on_unmount(self) -> None:
         if self._worker:
             self._worker.stop()
-<<<<<<< HEAD
-        self._start_watch()
-
-    # -- watch handover ---------------------------------------------------- #
-    def _stop_watch(self) -> None:
-        """Stop any running watch service so the TUI can own the browser."""
-        if shutil.which("systemctl"):
-            subprocess.run(
-                ["systemctl", "--user", "stop", "tgv-watch"],
-                capture_output=True,
-                timeout=10,
-            )
-
-    def _start_watch(self) -> None:
-        """Start the watch service when the TUI exits so notifications resume.
-
-        Clicking a notification stops the watch (releasing the browser) and
-        opens the TUI.
-        """
-        tgv = str(config.LAUNCHER)
-        open_tui = str(config.OPEN_TUI)
-
-        if shutil.which("systemctl"):
-            # Update the service file's click-cmd via an override.
-            from pathlib import Path as _Path
-            override_dir = (
-                _Path.home() / ".config" / "systemd" / "user" / "tgv-watch.service.d"
-            )
-            override_dir.mkdir(parents=True, exist_ok=True)
-            (override_dir / "tui-click.conf").write_text(
-                "[Service]\n"
-                "ExecStart=\n"
-                f"ExecStart={tgv} watch --interval {int(self._interval)} "
-                f"--click-cmd {open_tui}\n"
-            )
-            subprocess.run(
-                ["systemctl", "--user", "daemon-reload"],
-                capture_output=True,
-                timeout=10,
-            )
-            subprocess.run(
-                ["systemctl", "--user", "start", "tgv-watch"],
-                capture_output=True,
-                timeout=10,
-            )
-            return
-
-        # Fallback: launch a background watch process with a TUI click action.
-        subprocess.Popen(
-            [sys.executable, "-m", "tgv.cli", "watch",
-             "--interval", str(int(self._interval)),
-             "--click-cmd", open_tui],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-=======
->>>>>>> 161a1a8 (Watch: always-running with 5-min poll window and persistent dedup)
 
     # -- data -------------------------------------------------------------- #
     @work(thread=True)
