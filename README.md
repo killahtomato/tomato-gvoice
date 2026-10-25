@@ -104,8 +104,31 @@ tgv watch --once          # single check (for cron)
 tgv watch --json          # print notifications instead of a popup
 ```
 
+Each notification has an **Open in terminal** button — click it to open the
+conversation in a terminal (`foot --hold tgv read <n>`). Override the terminal
+with `--terminal` or `TGV_TERMINAL`.
+
 The first run seeds the state to "now", so old messages don't trigger a flood.
 Notifications use `notify-send` when available, falling back to terminal output.
+
+#### Running it in the background
+
+`tgv watch` blocks the terminal while it runs. To keep it running without a
+dedicated terminal, install the systemd user service:
+
+```bash
+systemctl --user enable --now tgv-watch
+```
+
+This starts on login and restarts on failure. Manage it with:
+
+```bash
+systemctl --user status tgv-watch
+systemctl --user stop tgv-watch
+journalctl --user -u tgv-watch -f
+```
+
+The service lives at `~/.config/systemd/user/tgv-watch.service`.
 
 ### Options
 
@@ -118,6 +141,7 @@ Notifications use `notify-send` when available, falling back to terminal output.
 | `--thread` | (search) Limit results to a contact/thread name |
 | `--interval` | (watch) Seconds between checks (default 30) |
 | `--once` | (watch) Check once and exit |
+| `--terminal` | (watch) Terminal to open clicked notifications in |
 
 ### Environment variables
 

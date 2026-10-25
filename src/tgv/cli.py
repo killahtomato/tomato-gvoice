@@ -172,6 +172,10 @@ def build_parser() -> argparse.ArgumentParser:
     watch_cmd.add_argument(
         "--json", action="store_true", help="print notifications as JSON"
     )
+    watch_cmd.add_argument(
+        "--terminal",
+        help="terminal to open clicked notifications in (default: auto-detect)",
+    )
 
     return parser
 
@@ -191,6 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 once=args.once,
                 as_json=args.json,
                 headless=not args.headed,
+                terminal=args.terminal,
             )
         except KeyboardInterrupt:
             pass
