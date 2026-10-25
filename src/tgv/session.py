@@ -44,7 +44,20 @@ def _new_context(playwright: Playwright, headless: bool) -> BrowserContext:
         kwargs["executable_path"] = executable
     else:
         kwargs["channel"] = "chromium"
-    return playwright.chromium.launch_persistent_context(**kwargs)
+
+    # The profile can be briefly locked by a concurrent tgv process (e.g. the
+    # background watcher). Retry for a few seconds before giving up.
+    last_error: PlaywrightError | None = None
+    for attempt in range(6):
+        try:
+            return playwright.chromium.launch_persistent_context(**kwargs)
+        except PlaywrightError as exc:
+            last_error = exc
+            if "ProcessSingleton" in str(exc) and attempt < 5:
+                time.sleep(2)
+                continue
+            raise
+    raise last_error  # pragma: no cover - unreachable
 
 
 def _get_page(context: BrowserContext) -> Page:

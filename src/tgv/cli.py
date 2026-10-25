@@ -182,6 +182,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "login":
         return 0 if session.login() else 1
 
+    if args.command == "watch":
+        # The watcher manages its own browser (launch/close per poll) so it
+        # doesn't hold the profile lock open.
+        try:
+            watch.watch(
+                interval=args.interval,
+                once=args.once,
+                as_json=args.json,
+                headless=not args.headed,
+            )
+        except KeyboardInterrupt:
+            pass
+        return 0
+
     try:
         with session.browser(headless=not args.headed) as page:
             if args.command == "status":
@@ -245,10 +259,6 @@ def main(argv: list[str] | None = None) -> int:
                     page, args.query, thread_name=args.thread, limit=args.limit
                 )
                 _emit(results, args.json, _print_search)
-            elif args.command == "watch":
-                watch.watch(
-                    page, interval=args.interval, once=args.once, as_json=args.json
-                )
     except session.AuthenticationRequiredError as exc:
         print(str(exc), file=sys.stderr)
         return 2

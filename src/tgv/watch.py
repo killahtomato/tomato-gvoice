@@ -10,9 +10,8 @@ import sys
 import time
 
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import Page
 
-from . import config, reader
+from . import config, reader, session
 
 _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
@@ -56,8 +55,18 @@ def _notify(message: dict, as_json: bool) -> None:
         print(f"{title}\n  {text}", file=sys.stderr)
 
 
-def watch(page: Page, *, interval: float, once: bool, as_json: bool) -> None:
-    """Poll for new messages and notify about them until interrupted."""
+def watch(
+    *,
+    interval: float,
+    once: bool,
+    as_json: bool,
+    headless: bool = True,
+) -> None:
+    """Poll for new messages and notify about them until interrupted.
+
+    The browser is launched and closed for each poll so the profile is not held
+    open, letting other tgv commands run between checks.
+    """
     last_ts = _load_state()
     seeded = last_ts > 0
     print(
@@ -67,31 +76,31 @@ def watch(page: Page, *, interval: float, once: bool, as_json: bool) -> None:
 
     while True:
         try:
-            now_ms = time.time() * 1000
-            if not seeded:
-                # Seed to the newest message so old ones don't spam us.
-                messages = reader.messages_since(page, since_ms=0, now_ms=now_ms)
-                last_ts = max((m["_ts"] for m in messages), default=now_ms)
-                _save_state(last_ts)
-                seeded = True
-                print(f"Seeded at {last_ts:.0f}; watching from now.", file=sys.stderr)
-            else:
-                since_ms = max(1.0, now_ms - last_ts)
-                messages = reader.messages_since(page, since_ms=since_ms, now_ms=now_ms)
-                for m in messages:
-                    _notify(m, as_json)
-                if messages:
-                    last_ts = max(m["_ts"] for m in messages)
+            with session.browser(headless=headless) as page:
+                now_ms = time.time() * 1000
+                if not seeded:
+                    # Seed to the newest message so old ones don't spam us.
+                    messages = reader.messages_since(page, since_ms=0, now_ms=now_ms)
+                    last_ts = max((m["_ts"] for m in messages), default=now_ms)
                     _save_state(last_ts)
+                    seeded = True
+                    print(f"Seeded at {last_ts:.0f}; watching from now.", file=sys.stderr)
+                else:
+                    since_ms = max(1.0, now_ms - last_ts)
+                    messages = reader.messages_since(page, since_ms=since_ms, now_ms=now_ms)
+                    for m in messages:
+                        _notify(m, as_json)
+                    if messages:
+                        last_ts = max(m["_ts"] for m in messages)
+                        _save_state(last_ts)
         except KeyboardInterrupt:
+            break
+        except session.AuthenticationRequiredError:
+            print("Session expired. Run `tgv login` again.", file=sys.stderr)
             break
         except PlaywrightError as exc:
             message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
-            print(
-                f"watch stopped: {message}\n"
-                "If the session expired, run `tgv login` again.",
-                file=sys.stderr,
-            )
+            print(f"watch stopped: {message}", file=sys.stderr)
             break
 
         if once:
