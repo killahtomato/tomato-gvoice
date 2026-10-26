@@ -200,6 +200,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser(
         "tui-login", help="sign in to the TUI's separate browser profile (one-time)"
     )
+    watchdog_cmd = sub.add_parser(
+        "watchdog", help="manage the TUI lock file (run as a separate service)"
+    )
+    watchdog_cmd.add_argument(
+        "--interval", type=float, default=5.0, help="seconds between polls (default: 5)"
+    )
 
     return parser
 
@@ -234,6 +240,12 @@ def main(argv: list[str] | None = None) -> int:
         from . import tui as tui_module
 
         tui_module.run_tui(headless=not args.headed, interval=args.interval)
+        return 0
+
+    if args.command == "watchdog":
+        from . import watch as watch_module
+
+        watch_module.watchdog(interval=args.interval)
         return 0
 
     try:

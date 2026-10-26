@@ -405,7 +405,6 @@ class TuiApp(App):
         self._threads: list[dict] = []
         self._selected: int | None = None
         self._last_ts: float = 0.0
-        self._lock_created = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -416,29 +415,23 @@ class TuiApp(App):
                 yield ComposeBar(id="compose")
         yield Footer()
 
-    def _create_lock(self) -> None:
-        if self._lock_created:
-            return
-        config.TUI_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
-        config.TUI_LOCK_FILE.write_text(str(os.getpid()))
-        self._lock_created = True
-
-    def _remove_lock(self) -> None:
-        if not self._lock_created:
-            return
-        try:
-            config.TUI_LOCK_FILE.unlink()
-        except FileNotFoundError:
-            pass
-        self._lock_created = False
-
     def on_mount(self) -> None:
-        self._create_lock()
+        self._write_pid()
         self._install_exit_handlers()
         self._start()
 
+    def _write_pid(self) -> None:
+        config.TUI_PID_FILE.parent.mkdir(parents=True, exist_ok=True)
+        config.TUI_PID_FILE.write_text(str(os.getpid()))
+
+    def _remove_pid(self) -> None:
+        try:
+            config.TUI_PID_FILE.unlink()
+        except FileNotFoundError:
+            pass
+
     def _install_exit_handlers(self) -> None:
-        atexit.register(self._remove_lock)
+        atexit.register(self._remove_pid)
         for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
             try:
                 signal.signal(sig, self._signal_handler)
@@ -447,10 +440,8 @@ class TuiApp(App):
 
     def _signal_handler(self, signum: int, frame: object) -> None:
         if signum == signal.SIGHUP:
-            # Ignore SIGHUP — we were launched from a notification action and
-            # the parent process group may have exited. Stay alive.
             return
-        self._remove_lock()
+        self._remove_pid()
         raise SystemExit(0)
 
     @work(thread=True)
@@ -501,7 +492,7 @@ class TuiApp(App):
             pass
 
     def on_unmount(self) -> None:
-        self._remove_lock()
+        self._remove_pid()
         if self._worker:
             self._worker.stop()
 

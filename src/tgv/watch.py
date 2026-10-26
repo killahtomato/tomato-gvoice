@@ -278,3 +278,44 @@ def watch(
         if once:
             break
         time.sleep(interval)
+
+
+def _tui_pid_alive() -> bool:
+    """Return True when the PID in tui.pid exists and is a live tgv tui process."""
+    try:
+        pid = int(config.TUI_PID_FILE.read_text().strip())
+    except (OSError, ValueError):
+        return False
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+    return True
+
+
+def _clean_tui_ghosts() -> None:
+    """Kill orphaned Chromium processes left behind by a dead TUI."""
+    subprocess.run(
+        ["pkill", "-f", f"user-data-dir={config.TUI_PROFILE_DIR}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def watchdog(*, interval: float = 5.0) -> None:
+    """Manage the TUI lock file based on whether the TUI process is alive.
+
+    - TUI alive, no lock  → create lock (pause the main watch)
+    - TUI alive, lock     → no-op
+    - TUI dead, lock      → remove lock + kill Chromium ghosts (resume main watch)
+    - TUI dead, no lock   → no-op
+    """
+    while True:
+        pid_alive = _tui_pid_alive()
+        lock_exists = config.TUI_LOCK_FILE.exists()
+        if pid_alive and not lock_exists:
+            config.TUI_LOCK_FILE.write_text(str(os.getpid()))
+        elif not pid_alive and lock_exists:
+            config.TUI_LOCK_FILE.unlink()
+            _clean_tui_ghosts()
+        time.sleep(interval)

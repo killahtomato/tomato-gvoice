@@ -18,9 +18,12 @@ TUI_PROFILE_DIR = Path(
     os.environ.get("TGV_TUI_PROFILE_DIR", BASE_DIR.parent / f"{APP_NAME}-tui" / "chrome")
 )
 
-# Lock file the TUI creates while running; the watcher checks this to skip
-# polls (avoiding profile contention).
+# Lock file the watchdog creates while the TUI is running; the watcher
+# checks this to skip polls (avoiding duplicate notifications).
 TUI_LOCK_FILE = BASE_DIR / "tui.lock"
+
+# PID file the TUI writes on startup so the watchdog can check liveness.
+TUI_PID_FILE = BASE_DIR / "tui.pid"
 
 # Absolute path to the `tgv` launcher, used when opening a terminal.
 LAUNCHER = Path(__file__).resolve().parent.parent.parent / "tgv"
