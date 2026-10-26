@@ -155,14 +155,15 @@ def _notify(
         print(f"{title}\n  {text}", file=sys.stderr)
         return
 
-    # quickshell handles notification clicks via the omarchy-exec-argv hint,
-    # so we do NOT use --wait (it blocks indefinitely with quickshell's daemon).
-    args = ["notify-send", "-t", "0", "-a", "tgv"]
+    # quickshell handles notification clicks via the omarchy-exec-argv hint.
+    # omarchy-notification-send (via busctl) sets the hint JSON correctly;
+    # notify-send does not reliably relay it to quickshell's daemon.
     if click_cmd:
-        args += ["-h", f"string:omarchy-exec-argv:{json.dumps(click_cmd)}"]
+        args = ["omarchy-notification-send", title, text, "--exec", *click_cmd]
     elif terminal and thread:
-        args += ["-h", f"string:omarchy-exec-argv:{json.dumps(_terminal_command(terminal, thread))}"]
-    args += ["-A", "default=Open TUI", title, text]
+        args = ["omarchy-notification-send", title, text, "--exec", *_terminal_command(terminal, thread)]
+    else:
+        args = ["omarchy-notification-send", title, text]
     subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
@@ -238,6 +239,11 @@ def watch(
                     if msg_id:
                         notified.add(msg_id)
 
+                # Persist before notifying so a kill during notification doesn't
+                # cause re-notification of the same messages on restart.
+                if new_messages:
+                    _save_state(notified)
+
                 for m in new_messages:
                     _notify(m, as_json, terminal, click_cmd=click_cmd)
                 if new_messages:
@@ -245,9 +251,6 @@ def watch(
                         f"Notified about {len(new_messages)} message(s).",
                         file=sys.stderr,
                     )
-
-                if new_messages:
-                    _save_state(notified)
         except KeyboardInterrupt:
             break
         except session.AuthenticationRequiredError:
