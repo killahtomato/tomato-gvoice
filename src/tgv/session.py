@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import time
 from contextlib import contextmanager
+from pathlib import Path
 from urllib.parse import urlsplit
 from typing import Iterator
 
@@ -32,10 +34,45 @@ class AuthenticationRequiredError(VoiceError):
         )
 
 
-def _new_context(playwright: Playwright, headless: bool) -> BrowserContext:
+def _clear_stale_singleton_locks(user_data_dir: str) -> None:
+    """Remove Chromium Singleton lock files left behind by a crashed process.
+
+    The SingletonLock symlink encodes the host and PID that owns the profile.
+    If that PID is no longer running, the lock is stale and can be safely
+    deleted so a new browser instance can start.
+    """
+    lock = Path(user_data_dir) / "SingletonLock"
+    if not lock.exists():
+        return
+    try:
+        target = os.readlink(str(lock))
+    except OSError:
+        return
+    # target is "<hostname>-<pid>"; the original process may also leave
+    # SingletonSocket and SingletonCookie alongside it.
+    parts = target.rsplit("-", 1)
+    if len(parts) == 2 and parts[1].isdigit():
+        pid = int(parts[1])
+        try:
+            os.kill(pid, 0)
+            return  # process is still alive — lock is valid
+        except (OSError, ProcessLookupError):
+            pass  # stale lock
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        try:
+            (Path(user_data_dir) / name).unlink()
+        except FileNotFoundError:
+            pass
+
+
+def _new_context(
+    playwright: Playwright, headless: bool = True, profile_dir: Path | None = None
+) -> BrowserContext:
     executable = config.resolve_chrome_executable()
+    user_data_dir = str(profile_dir or config.PROFILE_DIR)
+    _clear_stale_singleton_locks(user_data_dir)
     kwargs = {
-        "user_data_dir": str(config.PROFILE_DIR),
+        "user_data_dir": user_data_dir,
         "headless": headless,
         "viewport": {"width": 1280, "height": 900},
         "args": ["--disable-blink-features=AutomationControlled"],
@@ -60,9 +97,11 @@ def _new_context(playwright: Playwright, headless: bool) -> BrowserContext:
     raise last_error  # pragma: no cover - unreachable
 
 
-def launch_context(playwright: Playwright, headless: bool = True) -> BrowserContext:
+def launch_context(
+    playwright: Playwright, headless: bool = True, profile_dir: Path | None = None
+) -> BrowserContext:
     """Public wrapper around _new_context for use by the TUI worker."""
-    return _new_context(playwright, headless=headless)
+    return _new_context(playwright, headless=headless, profile_dir=profile_dir)
 
 
 def get_page(context: BrowserContext) -> Page:
@@ -181,6 +220,53 @@ def login(timeout_seconds: int = 300) -> bool:
                 print("Signed in successfully.", file=sys.stderr)
                 return True
             print("Sign-in did not complete.", file=sys.stderr)
+            return False
+        finally:
+            context.close()
+
+
+def login_tui(timeout_seconds: int = 300) -> bool:
+    """Sign in to the TUI's separate browser profile."""
+    config.TUI_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as playwright:
+        context = _new_context(playwright, headless=False, profile_dir=config.TUI_PROFILE_DIR)
+        try:
+            page = _get_page(context)
+            navigate_to_messages(page)
+
+            if not _on_voice_app(page):
+                href = page.evaluate(
+                    """() => {
+                        const a = document.querySelector(
+                            'a[href*="accounts.google.com"][href*="voice.google.com"]'
+                        );
+                        return a ? a.href : null;
+                    }"""
+                )
+                if href:
+                    page.goto(href)
+                    page.wait_for_load_state("networkidle", timeout=10_000)
+
+            print(
+                "A browser window opened to Google Voice for the TUI.\n"
+                "Complete the Google sign-in (password + 2FA if prompted), "
+                "then return here.",
+                file=sys.stderr,
+            )
+
+            deadline = time.time() + timeout_seconds
+            while time.time() < deadline:
+                time.sleep(2)
+                if _on_voice_app(page):
+                    break
+            else:
+                print("Timed out waiting for sign-in.", file=sys.stderr)
+                return False
+
+            if is_authenticated(page):
+                print("TUI signed in successfully.", file=sys.stderr)
+                return True
+            print("TUI sign-in did not complete.", file=sys.stderr)
             return False
         finally:
             context.close()

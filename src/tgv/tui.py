@@ -7,20 +7,25 @@ never blocks.
 
 from __future__ import annotations
 
+import atexit
+import os
 import queue
 import re
-import subprocess
+import signal
 import threading
 import time
+from pathlib import Path
 from typing import Any, Callable
 
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from . import config, contacts, reader, sender, session
+from .session import AuthenticationRequiredError
 
 _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
@@ -35,7 +40,8 @@ def _clean(text: str | None) -> str:
 class BrowserWorker:
     """Owns the Playwright page in a dedicated thread."""
 
-    def __init__(self, headless: bool = True) -> None:
+    def __init__(self, profile_dir: Path | None = None, headless: bool = True) -> None:
+        self._profile_dir = profile_dir or config.TUI_PROFILE_DIR
         self._headless = headless
         self._requests: queue.Queue = queue.Queue()
         self._responses: queue.Queue = queue.Queue()
@@ -47,10 +53,15 @@ class BrowserWorker:
 
         try:
             with sync_playwright() as playwright:
-                context = session.launch_context(playwright, headless=self._headless)
+                context = session.launch_context(
+                    playwright, headless=self._headless, profile_dir=self._profile_dir
+                )
                 try:
                     page = session.get_page(context)
-                    self._responses.put(("ready", None))
+                    if not session.is_authenticated(page):
+                        self._responses.put(("auth_required", None))
+                    else:
+                        self._responses.put(("ready", None))
                     while True:
                         item = self._requests.get()
                         if item is None:
@@ -70,6 +81,8 @@ class BrowserWorker:
         status, payload = self._responses.get()
         if status == "error":
             raise payload
+        if status == "auth_required":
+            raise AuthenticationRequiredError()
 
     def call(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:
         self._requests.put((fn, args, kwargs))
@@ -392,8 +405,8 @@ class TuiApp(App):
         self._threads: list[dict] = []
         self._selected: int | None = None
         self._last_ts: float = 0.0
+        self._lock_created = False
 
-    # -- layout ------------------------------------------------------------ #
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         with Horizontal(id="main"):
@@ -403,15 +416,56 @@ class TuiApp(App):
                 yield ComposeBar(id="compose")
         yield Footer()
 
-    # -- lifecycle --------------------------------------------------------- #
+    def _create_lock(self) -> None:
+        if self._lock_created:
+            return
+        config.TUI_LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+        config.TUI_LOCK_FILE.write_text(str(os.getpid()))
+        self._lock_created = True
+
+    def _remove_lock(self) -> None:
+        if not self._lock_created:
+            return
+        try:
+            config.TUI_LOCK_FILE.unlink()
+        except FileNotFoundError:
+            pass
+        self._lock_created = False
+
     def on_mount(self) -> None:
+        self._create_lock()
+        self._install_exit_handlers()
         self._start()
+
+    def _install_exit_handlers(self) -> None:
+        atexit.register(self._remove_lock)
+        for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+            try:
+                signal.signal(sig, self._signal_handler)
+            except (OSError, ValueError):
+                pass
+
+    def _signal_handler(self, signum: int, frame: object) -> None:
+        if signum == signal.SIGHUP:
+            # Ignore SIGHUP — we were launched from a notification action and
+            # the parent process group may have exited. Stay alive.
+            return
+        self._remove_lock()
+        raise SystemExit(0)
 
     @work(thread=True)
     def _start(self) -> None:
         try:
             self._worker = BrowserWorker(headless=self._headless)
             self._worker.start()
+        except AuthenticationRequiredError:
+            self.call_from_thread(
+                self.notify,
+                "Not signed in. Run `tgv tui-login` first.",
+                severity="error",
+                timeout=10,
+            )
+            return
         except Exception as exc:  # noqa: BLE001
             self.call_from_thread(
                 self.notify, f"Could not start the browser: {exc}", severity="error"
@@ -422,11 +476,32 @@ class TuiApp(App):
     def _worker_ready(self) -> None:
         # Seed the poll cursor so we don't toast every old message.
         self._last_ts = time.time() * 1000
-        self.refresh_threads()
-        self.query_one("#sidebar").focus()
+        # The widget tree may not be fully composed yet when the worker
+        # signals ready. Retry on the next refresh if the sidebar is missing.
+        try:
+            self.refresh_threads()
+        except NoMatches:
+            self.call_after_refresh(self._refresh_on_mount)
+        try:
+            self.query_one("#sidebar").focus()
+        except NoMatches:
+            self.call_after_refresh(self._focus_sidebar)
         self.set_interval(self._interval, self.poll)
 
+    def _refresh_on_mount(self) -> None:
+        try:
+            self.refresh_threads()
+        except NoMatches:
+            pass
+
+    def _focus_sidebar(self) -> None:
+        try:
+            self.query_one("#sidebar").focus()
+        except NoMatches:
+            pass
+
     def on_unmount(self) -> None:
+        self._remove_lock()
         if self._worker:
             self._worker.stop()
 
@@ -443,8 +518,14 @@ class TuiApp(App):
 
     def _set_threads(self, threads: list[dict]) -> None:
         self._threads = threads
-        sidebar = self.query_one("#sidebar", ThreadList)
+        try:
+            sidebar = self.query_one("#sidebar", ThreadList)
+        except NoMatches:
+            return
         sidebar.clear()
+        if not threads:
+            sidebar.append(ListItem(Static("No conversations.")))
+            return
         for thread in threads:
             marker = "●" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
@@ -513,8 +594,6 @@ class TuiApp(App):
     def poll(self) -> None:
         assert self._worker is not None
         try:
-            import time
-
             now_ms = time.time() * 1000
             since_ms = max(1.0, now_ms - self._last_ts)
             messages = self._worker.call(reader.messages_since, since_ms, now_ms=now_ms)
@@ -591,9 +670,6 @@ class TuiApp(App):
 
     def action_quit(self) -> None:
         self.exit()
-
-    def action_refresh(self) -> None:
-        self.refresh_threads()
 
 
 def run_tui(*, headless: bool = True, interval: float = 30.0) -> None:

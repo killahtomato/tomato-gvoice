@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+from pathlib import Path
 
 from playwright.sync_api import Error as PlaywrightError
 
@@ -17,6 +18,16 @@ from . import config, reader, session
 
 _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 _POLL_WINDOW_MS = 5 * 60 * 1000  # look back 5 minutes on every poll
+_LOG_PATH = Path(os.environ.get("TGV_WATCH_LOG", config.BASE_DIR / "watch.log"))
+
+def _log() -> object:
+    """Return the debug log stream (lazy, opened on first use)."""
+    stream = getattr(_send_notification, "_log", None)
+    if stream is None:
+        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        stream = open(_LOG_PATH, "a", encoding="utf-8")
+        setattr(_send_notification, "_log", stream)
+    return stream
 
 TERMINAL_CANDIDATES = (
     os.environ.get("TGV_TERMINAL"),
@@ -103,12 +114,23 @@ def _send_notification(
     proc = subprocess.run(args, capture_output=True, text=True)
     action = proc.stdout.strip()
     if action == "default" and click_cmd:
+        log = _log()
+        print(f"[tgv-watch] notify-send action=default, running click_cmd={click_cmd}", file=log)
+        log.flush()
         try:
             subprocess.Popen(click_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except OSError:
-            pass
+        except OSError as e:
+            print(f"[tgv-watch] click_cmd failed: {e}", file=log)
+            log.flush()
     elif action == "default":
+        log = _log()
+        print(f"[tgv-watch] notify-send action=default, no click_cmd — opening terminal", file=log)
+        log.flush()
         _open_terminal(thread, terminal)
+    else:
+        log = _log()
+        print(f"[tgv-watch] notify-send action={action!r} (no click)", file=log)
+        log.flush()
 
 
 def _notify(
@@ -133,22 +155,32 @@ def _notify(
         print(f"{title}\n  {text}", file=sys.stderr)
         return
 
-    cmd = click_cmd or (_terminal_command(terminal, thread) if (terminal and thread) else None)
-    args = ["notify-send", "--wait", "-t", "0", "-a", "tgv"]
-    if cmd:
-        args += ["-h", f"string:omarchy-exec-argv:{json.dumps(cmd)}"]
-    args += ["-A", "default=Open in terminal", title, text]
-    threading.Thread(
-        target=_send_notification,
-        args=(args, thread, terminal, click_cmd),
-        daemon=True,
-    ).start()
+    # quickshell handles notification clicks via the omarchy-exec-argv hint,
+    # so we do NOT use --wait (it blocks indefinitely with quickshell's daemon).
+    args = ["notify-send", "-t", "0", "-a", "tgv"]
+    if click_cmd:
+        args += ["-h", f"string:omarchy-exec-argv:{json.dumps(click_cmd)}"]
+    elif terminal and thread:
+        args += ["-h", f"string:omarchy-exec-argv:{json.dumps(_terminal_command(terminal, thread))}"]
+    args += ["-A", "default=Open TUI", title, text]
+    subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def _is_profile_locked(exc: BaseException) -> bool:
     """True when the browser profile is in use by another process."""
     text = str(exc).lower()
     return "processsingleton" in text or "profile" in text and "lock" in text
+
+
+def _daemonize() -> None:
+    """Double-fork into a background process so the watcher survives terminal close."""
+    if os.fork() > 0:
+        sys.exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        sys.exit(0)
+    sys.stdout = open(os.devnull, "w")
+    sys.stderr = open(os.devnull, "w")
 
 
 def watch(
@@ -159,7 +191,12 @@ def watch(
     headless: bool = True,
     terminal: str | None = None,
     click_cmd: list[str] | None = None,
+    background: bool = False,
 ) -> None:
+    """Poll for new messages and notify about them until interrupted."""
+    # Default: clicking a notification opens the interactive TUI.
+    if click_cmd is None:
+        click_cmd = [str(config.OPEN_TUI)]
     """Poll for new messages and notify about them until interrupted.
 
     Every poll looks back a fixed window (5 minutes) so messages aren't missed
@@ -167,15 +204,26 @@ def watch(
     across restarts. Clicking a notification runs ``click_cmd`` (default: open
     the thread in a terminal).
     """
+    if background:
+        _daemonize()
     terminal = resolve_terminal(terminal)
     notified = _load_state()
-    print(
-        f"Watching for new messages every {interval:g}s (Ctrl+C to stop).",
-        file=sys.stderr,
-    )
+    if not background:
+        print(
+            f"Watching for new messages every {interval:g}s (Ctrl+C to stop).",
+            file=sys.stderr,
+        )
 
     while True:
         now_ms = time.time() * 1000
+        # Skip while the interactive TUI is running so we never contend for
+        # the browser profile.
+        if config.TUI_LOCK_FILE.exists():
+            print("[watch] TUI active; skipping poll.", flush=True)
+            if once:
+                break
+            time.sleep(interval)
+            continue
         try:
             with session.browser(headless=headless) as page:
                 messages = reader.messages_since(
@@ -212,11 +260,17 @@ def watch(
             if _is_profile_locked(exc):
                 # The profile is in use by the TUI or another tgv process;
                 # skip this poll and try again after the interval.
-                print("Profile in use; skipping this poll.", file=sys.stderr)
+                print(
+                    f"Profile in use ({str(exc).splitlines()[0][:60]}); skipping.",
+                    file=sys.stderr,
+                )
             else:
                 message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
                 print(f"watch stopped: {message}", file=sys.stderr)
                 break
+        except Exception as exc:  # noqa: BLE001
+            print(f"watch error: {type(exc).__name__}: {exc}", file=sys.stderr)
+            break
 
         if once:
             break

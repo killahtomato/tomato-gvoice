@@ -12,6 +12,16 @@ PROFILE_DIR = Path(os.environ.get("TGV_PROFILE_DIR", BASE_DIR / "chrome"))
 CONTACTS_CACHE = Path(os.environ.get("TGV_CONTACTS_CACHE", BASE_DIR / "contacts.json"))
 WATCH_STATE = Path(os.environ.get("TGV_WATCH_STATE", BASE_DIR / "watch_state.json"))
 
+# The interactive TUI uses a separate browser profile so it never contends
+# with the background watcher for the lock.
+TUI_PROFILE_DIR = Path(
+    os.environ.get("TGV_TUI_PROFILE_DIR", BASE_DIR.parent / f"{APP_NAME}-tui" / "chrome")
+)
+
+# Lock file the TUI creates while running; the watcher checks this to skip
+# polls (avoiding profile contention).
+TUI_LOCK_FILE = BASE_DIR / "tui.lock"
+
 # Absolute path to the `tgv` launcher, used when opening a terminal.
 LAUNCHER = Path(__file__).resolve().parent.parent.parent / "tgv"
 

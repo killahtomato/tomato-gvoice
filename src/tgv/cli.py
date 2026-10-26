@@ -177,18 +177,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="terminal to open clicked notifications in (default: auto-detect)",
     )
     watch_cmd.add_argument(
+        "--background",
+        action="store_true",
+        help="detach into the background (survives terminal close)",
+    )
+    watch_cmd.add_argument(
         "--click-cmd",
         nargs="+",
-        help="command to run when a notification is clicked (default: open thread in terminal)",
+        default=None,
+        help="command to run when a notification is clicked (default: open TUI in foot)",
     )
 
     tui_cmd = sub.add_parser("tui", help="open the interactive terminal UI")
     tui_cmd.add_argument(
-        "--headed", action="store_true", default=argparse.SUPPRESS,
+        "--headed", action="store_true", default=False,
         help="run the browser in a visible window",
     )
     tui_cmd.add_argument(
         "--interval", type=float, default=30.0, help="seconds between polls"
+    )
+
+    sub.add_parser(
+        "tui-login", help="sign in to the TUI's separate browser profile (one-time)"
     )
 
     return parser
@@ -211,10 +221,14 @@ def main(argv: list[str] | None = None) -> int:
                 headless=not args.headed,
                 terminal=args.terminal,
                 click_cmd=args.click_cmd,
+                background=args.background,
             )
         except KeyboardInterrupt:
             pass
         return 0
+
+    if args.command == "tui-login":
+        return 0 if session.login_tui() else 1
 
     if args.command == "tui":
         from . import tui as tui_module
