@@ -65,6 +65,20 @@ def _clear_stale_singleton_locks(user_data_dir: str) -> None:
             pass
 
 
+def force_clear_singleton_locks(user_data_dir: str) -> None:
+    """Unconditionally remove all Singleton lock files for a profile.
+
+    Use this for profiles that are exclusively managed by a single process
+    (like the main tgv profile used only by the watch) — any existing lock
+    is by definition stale.
+    """
+    for name in ("SingletonLock", "SingletonSocket", "SingletonCookie"):
+        try:
+            (Path(user_data_dir) / name).unlink()
+        except FileNotFoundError:
+            pass
+
+
 def _new_context(
     playwright: Playwright, headless: bool = True, profile_dir: Path | None = None
 ) -> BrowserContext:
@@ -117,36 +131,35 @@ def _get_page(context: BrowserContext) -> Page:
 
 
 def navigate_to_messages(page: Page) -> None:
-    page.goto(config.MESSAGES_URL, wait_until="domcontentloaded")
-    # The Voice app keeps long-lived connections (websockets/polling) open, so
-    # "networkidle" never settles. Give redirects a moment to resolve instead.
-    try:
-        page.wait_for_load_state("networkidle", timeout=2_000)
-    except PlaywrightError:
-        pass
-    # Wait for the URL to stop changing so we don't read it mid-redirect.
-    last_url: str | None = None
-    for _ in range(10):
-        current = page.url
-        if current == last_url:
-            break
-        last_url = current
-        page.wait_for_timeout(300)
+    """Navigate to the inbox. Retries through transient Chromium errors."""
+    for attempt in range(3):
+        try:
+            page.goto(config.MESSAGES_URL, wait_until="domcontentloaded", timeout=15_000)
+            # The Voice app keeps long-lived connections (websockets/polling) open,
+            # so "networkidle" never settles. Give redirects a moment to resolve.
+            try:
+                page.wait_for_load_state("networkidle", timeout=2_000)
+            except PlaywrightError:
+                pass
+            return
+        except PlaywrightError as exc:
+            # ERR_ABORTED or "Target page" errors mean Chromium is still
+            # settling; retry after a brief pause. Use a fresh page if the
+            # current one died.
+            if attempt < 2 and ("ERR_ABORTED" in str(exc) or "Target" in str(exc)):
+                try:
+                    page.wait_for_timeout(1_000)
+                except PlaywrightError:
+                    pass
+                continue
+            raise
 
 
 def is_authenticated(page: Page) -> bool:
-    """Return True when the current page shows the signed-in Voice app.
-
-    The redirect can be slow on a cold launch, so retry a few times before
-    concluding the session is gone.
-    """
-    for attempt in range(3):
-        navigate_to_messages(page)
-        parsed = urlsplit(page.url)
-        if parsed.hostname == "voice.google.com" and not parsed.path.startswith("/landing"):
-            return True
-        if attempt < 2:
-            page.wait_for_timeout(1_500)
+    """Return True when the current page shows the signed-in Voice app."""
+    navigate_to_messages(page)
+    parsed = urlsplit(page.url)
+    return parsed.hostname == "voice.google.com" and not parsed.path.startswith("/landing")
     return False
 
 

@@ -217,14 +217,13 @@ def watch(
 
     while True:
         now_ms = time.time() * 1000
-        # Skip while the interactive TUI is running so we never contend for
-        # the browser profile.
         if config.TUI_LOCK_FILE.exists():
             print("[watch] TUI active; skipping poll.", flush=True)
             if once:
                 break
             time.sleep(interval)
             continue
+        _clean_main_chrome()
         try:
             with session.browser(headless=headless) as page:
                 messages = reader.messages_since(
@@ -269,15 +268,14 @@ def watch(
                 )
             else:
                 message = str(exc).splitlines()[0] if str(exc) else exc.__class__.__name__
-                print(f"watch stopped: {message}", file=sys.stderr)
-                break
+                print(f"watch error: {message}; will retry.", file=sys.stderr)
         except Exception as exc:  # noqa: BLE001
-            print(f"watch error: {type(exc).__name__}: {exc}", file=sys.stderr)
-            break
+            print(f"watch error: {type(exc).__name__}: {exc}; will retry.", file=sys.stderr)
 
         if once:
             break
         time.sleep(interval)
+        _clean_main_chrome()
 
 
 def _tui_pid_alive() -> bool:
@@ -297,6 +295,16 @@ def _clean_tui_ghosts() -> None:
     """Kill orphaned Chromium processes left behind by a dead TUI."""
     subprocess.run(
         ["pkill", "-f", f"user-data-dir={config.TUI_PROFILE_DIR}"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def _clean_main_chrome() -> None:
+    """Kill any lingering Chromium from a previous watch poll so the next
+    poll's browser launch doesn't fail with a ProcessSingleton error."""
+    subprocess.run(
+        ["pkill", "-f", f"user-data-dir={config.PROFILE_DIR}"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
