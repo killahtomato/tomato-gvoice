@@ -445,12 +445,13 @@ class TuiApp(App):
         padding: 1 2;
         width: auto;
         height: auto;
+        min-height: 12;
         max-height: 90%;
         overflow-y: auto;
     }
 
     ModalScreen {
-        align: center middle;
+        align: top;
     }
     #search-input { margin: 1; }
     #search-results { height: 1fr; }
