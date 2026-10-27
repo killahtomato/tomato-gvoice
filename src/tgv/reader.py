@@ -320,14 +320,18 @@ def read_thread(page: Page, ref: str, limit: int = 100) -> dict:
                     text: clean(content ? content.textContent : null),
                 };
             });
+            const headerTitle = clean(
+                details.querySelector('gv-thread-details-header .header-title')?.textContent
+            );
+            const secondary = clean(
+                details.querySelector('gv-thread-details-header .secondary-text')?.textContent
+            );
             return {
                 messages,
-                participant: clean(
-                    details.querySelector('gv-thread-details-header .secondary-text')?.textContent
-                ),
-                title: clean(
-                    details.querySelector('gv-thread-details-header .header-title')?.textContent
-                ),
+                // Use the contact name if available, otherwise fall back to the
+                // phone number (shown as "mobile - ..." when only a number is known).
+                participant: headerTitle or secondary,
+                title: secondary or headerTitle,
                 totalMessages: items.length,
             };
         }""",
