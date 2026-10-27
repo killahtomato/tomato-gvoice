@@ -170,6 +170,8 @@ class HelpScreen(ModalScreen):
         "  ⠈⠳⣦⡀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⣠⡾⠋⠀⠀"
         "    ⠈⠙⠳⠤⢤⣤⣤⣤⡤⠤⠴⠚⠋⠁⠀⠀⠀⠀"
             "",
+            "",
+            "",
             "  j / ↓   next thread",
             "  k / ↑   previous thread",
             "  Enter   open thread",
