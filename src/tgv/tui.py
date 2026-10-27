@@ -19,6 +19,7 @@ from typing import Any, Callable
 
 from textual import work
 from textual.app import App, ComposeResult
+from rich.text import Text
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
@@ -32,6 +33,16 @@ _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
 def _clean(text: str | None) -> str:
     return _BIDI_RE.sub("", text or "").strip()
+
+
+class TruncatedStatic(Static):
+    """A Static that truncates with ellipsis instead of wrapping."""
+
+    def render(self) -> Text:
+        text = super().render()
+        text.no_wrap = True
+        text.overflow = "ellipsis"
+        return text
 
 
 # --------------------------------------------------------------------------- #
@@ -525,14 +536,14 @@ class TuiApp(App):
             return
         sidebar.clear()
         if not threads:
-            sidebar.append(ListItem(Static("No conversations.")))
+            sidebar.append(ListItem(TruncatedStatic("No conversations.")))
             return
         for thread in threads:
             marker = "●" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
             participant = _clean(thread.get("participant")) or "unknown"
             label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
-            sidebar.append(ListItem(Static(label)))
+            sidebar.append(ListItem(TruncatedStatic(label)))
         if threads:
             sidebar.index = 0
             self._selected = 0
