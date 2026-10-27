@@ -36,10 +36,12 @@ def _clean(text: str | None) -> str:
 
 
 class TruncatedStatic(Static):
-    """A Static that truncates with ellipsis instead of wrapping."""
+    """Static that does not wrap and truncates with ellipsis."""
 
     def render(self) -> Text:
         text = super().render()
+        if isinstance(text, str):
+            text = Text.from_markup(text)
         text.no_wrap = True
         text.overflow = "ellipsis"
         return text
@@ -339,7 +341,7 @@ class TuiApp(App):
     #sidebar ListView { height: 1fr; }
 
     #sidebar ListItem {
-        height: auto;
+        height: 2;
         padding: 0 1;
         border-bottom: solid $surface;
     }
