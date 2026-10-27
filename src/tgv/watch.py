@@ -194,6 +194,17 @@ def _save_state(notified: set[str]) -> None:
     )
 
 
+def fmt_uptime(seconds: int | None) -> str:
+    """Format uptime seconds as human-readable string."""
+    if seconds is None:
+        return "unknown"
+    h, rem = divmod(seconds, 3600)
+    m, s = divmod(rem, 60)
+    if h:
+        return f"{h}h {m}m"
+    return f"{m}m {s}s"
+
+
 def _notify(
     message: dict,
     as_json: bool,

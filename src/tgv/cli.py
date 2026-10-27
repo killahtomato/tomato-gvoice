@@ -219,6 +219,63 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def handle_status(as_json: bool = False) -> None:
+    """Print full system status for all tgv processes and services."""
+    from . import watch as watch_module, config
+
+    watch_s = watch_module.watch_status()
+    watchdog_s = watch_module.watchdog_status()
+    tui_s = watch_module._process_status("tgv-tui", ["tgv.cli tui"])
+    chromium_main = watch_module._find_tgv_pids(
+        f"user-data-dir={config.PROFILE_DIR}"
+    )
+    chromium_tui = watch_module._find_tgv_pids(
+        f"user-data-dir={config.TUI_PROFILE_DIR}"
+    )
+
+    if as_json:
+        print(json.dumps({
+            "watch": watch_s,
+            "watchdog": watchdog_s,
+            "tui": tui_s,
+            "chromium_main": len(chromium_main),
+            "chromium_tui": len(chromium_tui),
+        }, indent=2))
+        return
+
+    print("Tomato-gVoice System Status")
+    print("=" * 40)
+    print()
+
+    # Watch
+    w_mode = watch_s["mode"]
+    w_uptime = watch_module.fmt_uptime(watch_s.get("uptime_seconds"))
+    w_pids = ", ".join(str(p) for p in watch_s["pids"]) if watch_s["pids"] else ""
+    watch_line = f"  watch     : {w_mode:8s} | {w_uptime} | {watch_s['notified_count']} notified"
+    if w_pids:
+        watch_line += f" | PIDs {w_pids}"
+    print(watch_line)
+
+    # Watchdog
+    d_mode = watchdog_s["mode"]
+    d_uptime = watch_module.fmt_uptime(watchdog_s.get("uptime_seconds"))
+    d_pids = ", ".join(str(p) for p in watchdog_s["pids"]) if watchdog_s["pids"] else ""
+    dog_line = f"  watchdog  : {d_mode:8s} | {d_uptime} | {watchdog_s['lock_creations']} on, {watchdog_s['lock_removals']} off"
+    if d_pids:
+        dog_line += f" | PIDs {d_pids}"
+    print(dog_line)
+
+    # TUI
+    tui_pids = ", ".join(str(p) for p in tui_s["pids"]) if tui_s["pids"] else ""
+    tui_line = f"  tui       : {tui_s['mode']:8s}"
+    if tui_pids:
+        tui_line += f" | PIDs {tui_pids}"
+    print(tui_line)
+
+    # Chromium
+    print(f"  chromium  : {len(chromium_main)} main, {len(chromium_tui)} tui")
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -272,16 +329,25 @@ def main(argv: list[str] | None = None) -> int:
         watch_module.watchdog(interval=args.interval)
         return 0
 
+    if args.command == "status":
+        handle_status(as_json=args.json)
+        print()
+        try:
+            with session.browser(headless=not args.headed) as page:
+                data = session.status(page)
+                print("Google Voice:")
+                _emit(data, args.json, lambda d: print(
+                    f"  authenticated: {d['authenticated']}\n"
+                    f"  account: {d.get('accountLabel') or 'unknown'}\n"
+                    f"  url: {d['url']}"
+                ))
+        except AuthenticationRequiredError:
+            print("Google Voice: not signed in. Run `tgv login` first.")
+        return 0
+
     try:
         with session.browser(headless=not args.headed) as page:
-            if args.command == "status":
-                data = session.status(page)
-                _emit(data, args.json, lambda d: print(
-                    f"authenticated: {d['authenticated']}\n"
-                    f"url: {d['url']}\n"
-                    f"account: {d.get('accountLabel') or 'unknown'}"
-                ))
-            elif args.command == "threads":
+            if args.command == "threads":
                 items = reader.list_threads(page, args.limit)
                 _emit(items, args.json, _print_threads)
             elif args.command == "read":
