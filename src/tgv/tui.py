@@ -542,11 +542,13 @@ class TuiApp(App):
             label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
             sidebar.append(ListItem(Static(label)))
         if threads and self._selected is None:
-            sidebar.index = 0
             self._selected = 0
-            self.load_thread(0)
-        elif self._selected is not None and self._selected < len(threads):
-            sidebar.index = self._selected
+        if threads:
+            idx = min(self._selected, len(threads) - 1)
+            sidebar.index = idx
+            self._selected = idx
+            sidebar.focus()
+            self.load_thread(idx)
 
     @work(thread=True)
     def load_thread(self, index: int) -> None:
