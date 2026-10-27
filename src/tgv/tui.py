@@ -26,7 +26,7 @@ from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from . import config, contacts, reader, sender, session
-from .session import AuthenticationRequiredError
+from .session import AuthenticationRequiredError, VoiceError
 from .text_utils import clean
 
 
@@ -79,15 +79,22 @@ class BrowserWorker:
             with self._lock:
                 self._responses["init"] = ("error", exc)
 
-    def _wait_for(self, req_id: str) -> tuple[str, Any]:
+    def _wait_for(self, req_id: str, timeout: float = 30.0) -> tuple[str, Any]:
+        """Wait for a worker response. Raises VoiceError if the worker dies."""
+        deadline = time.monotonic() + timeout
         while True:
             with self._lock:
                 if req_id in self._responses:
                     return self._responses.pop(req_id)
+            if time.monotonic() >= deadline:
+                raise VoiceError(
+                    f"The browser worker did not respond within {timeout:g}s. "
+                    "It may have crashed or the session expired."
+                )
             time.sleep(0.01)
 
     def start(self) -> None:
-        status, payload = self._wait_for("init")
+        status, payload = self._wait_for("init", timeout=60.0)
         if status == "error":
             raise payload
         if status == "auth_required":

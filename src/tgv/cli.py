@@ -271,7 +271,9 @@ def main(argv: list[str] | None = None) -> int:
                 )
                 _emit(result, args.json, _print_recent)
             elif args.command == "send":
-                known = contacts.load(page, refresh=args.refresh)
+                known = contacts.load_cached_contacts() if not args.refresh else None
+                if known is None:
+                    known = contacts.load(page, refresh=args.refresh)
                 number, kind = contacts.resolve(args.recipient, known)
                 if number is None:
                     raise session.VoiceError(
@@ -289,20 +291,25 @@ def main(argv: list[str] | None = None) -> int:
                         print(f"Would send to {args.recipient} ({number})")
                     else:
                         print(f"Would send to {number}")
-                else:
+                    return 0
+                try:
                     sender.send(page, number, args.text)
-                    if args.json:
-                        print(json.dumps({
-                            "sent": True,
-                            "to": number,
-                            "resolved_from": args.recipient,
-                        }))
-                    elif kind == "contact":
-                        print(f"Sent to {args.recipient} ({number})")
-                    else:
-                        print(f"Sent to {number}")
+                except Exception as exc:
+                    raise session.VoiceError(str(exc)) from exc
+                if args.json:
+                    print(json.dumps({
+                        "sent": True,
+                        "to": number,
+                        "resolved_from": args.recipient,
+                    }))
+                elif kind == "contact":
+                    print(f"Sent to {args.recipient} ({number})")
+                else:
+                    print(f"Sent to {number}")
             elif args.command == "contacts":
-                known = contacts.load(page, refresh=args.refresh)
+                known = contacts.load_cached_contacts() if not args.refresh else None
+                if known is None:
+                    known = contacts.load(page, refresh=args.refresh)
                 results = contacts.search(args.query, known)
                 _emit(results, args.json, _print_contacts)
             elif args.command == "search":

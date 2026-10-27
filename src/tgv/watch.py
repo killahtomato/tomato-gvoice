@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
-import threading
 import time
-from pathlib import Path
 
 from playwright.sync_api import Error as PlaywrightError
 

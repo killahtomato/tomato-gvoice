@@ -147,15 +147,24 @@ def save(contacts: dict[str, list[str]]) -> None:
     )
 
 
-def load(page: Page, refresh: bool = False) -> dict[str, list[str]]:
-    """Load the contact map, using the disk cache when it is fresh."""
-    if not refresh and _cache_is_fresh():
+def load_cached_contacts() -> dict[str, list[str]] | None:
+    """Return contacts from disk cache if fresh, or None if cache is stale/missing."""
+    if _cache_is_fresh():
         try:
             cached = _read_cache()
             if cached:
                 return cached
         except (OSError, ValueError):
             pass
+    return None
+
+
+def load(page: Page, refresh: bool = False) -> dict[str, list[str]]:
+    """Load the contact map, using the disk cache when it is fresh."""
+    if not refresh:
+        cached = load_cached_contacts()
+        if cached is not None:
+            return cached
     contacts = fetch_contacts(page)
     save(contacts)
     return contacts
