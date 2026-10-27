@@ -541,17 +541,7 @@ class TuiApp(App):
                 preview = preview[: max_len - 1] + "…"
             label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
             sidebar.append(ListItem(Static(label)))
-        for thread in threads:
-            marker = "●" if thread.get("unread") else " "
-            preview = (thread.get("preview") or "").splitlines()[0]
-            participant = _clean(thread.get("participant")) or "unknown"
-            # Truncate preview to fit sender line and preview line.
-            max_len = max(10, sidebar_width - len(participant) - 2)
-            if len(preview) > max_len:
-                preview = preview[: max_len - 1] + "…"
-            label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
-            sidebar.append(ListItem(Static(label)))
-        if threads:
+        if threads and self._selected is None:
             sidebar.index = 0
             self._selected = 0
             self.load_thread(0)
