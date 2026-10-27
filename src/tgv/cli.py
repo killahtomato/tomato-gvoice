@@ -206,6 +206,11 @@ def build_parser() -> argparse.ArgumentParser:
     watchdog_cmd.add_argument(
         "--interval", type=float, default=5.0, help="seconds between polls (default: 5)"
     )
+    watchdog_cmd.add_argument(
+        "--background",
+        action="store_true",
+        help="detach into the background (survives terminal close)",
+    )
 
     return parser
 
@@ -245,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "watchdog":
         from . import watch as watch_module
 
+        if args.background:
+            watch_module._daemonize()
         watch_module.watchdog(interval=args.interval)
         return 0
 
