@@ -8,6 +8,7 @@ never blocks.
 from __future__ import annotations
 
 import atexit
+import json
 import os
 import queue
 import re
@@ -424,6 +425,7 @@ class TuiApp(App):
         self._selected: int | None = None
         self._last_ts: float = 0.0
         self._rebuilding = False
+        self._contacts_cache: dict[str, list[str]] | None = None
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -621,15 +623,17 @@ class TuiApp(App):
             static.update("Messaging: unknown")
 
     def _lookup_number(self, name: str | None) -> str | None:
-        """Look up the phone number for a contact name."""
+        """Look up the phone number for a contact name via disk cache."""
         if not name:
             return None
-        try:
-            contacts_map = self._worker.call(contacts.load)
-        except Exception:
-            return None
+        if self._contacts_cache is None:
+            try:
+                data = json.loads(config.CONTACTS_CACHE.read_text(encoding="utf-8"))
+                self._contacts_cache = data.get("contacts", {})
+            except (OSError, ValueError):
+                self._contacts_cache = {}
         normalized = contacts.normalize_name(name)
-        for cname, numbers in contacts_map.items():
+        for cname, numbers in self._contacts_cache.items():
             if contacts.normalize_name(cname) == normalized:
                 return numbers[0] if numbers else None
         return None
