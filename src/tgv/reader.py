@@ -328,8 +328,8 @@ def read_thread(page: Page, ref: str, limit: int = 100) -> dict:
             );
             return {
                 messages,
-                participant: headerTitle or secondary,
-                title: secondary or headerTitle,
+                participant: headerTitle || secondary,
+                title: secondary || headerTitle,
                 totalMessages: items.length,
             };
         }""",
