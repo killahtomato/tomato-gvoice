@@ -582,8 +582,6 @@ class TuiApp(App):
 
     def on_unmount(self) -> None:
         self._remove_pid()
-        if self._worker:
-            self._worker.stop()
 
     # -- data -------------------------------------------------------------- #
     @work(thread=True)
@@ -829,7 +827,7 @@ class TuiApp(App):
         self.load_thread(self._selected)
 
     def action_quit(self) -> None:
-        self.exit()
+        self.app.exit()
 
 
 def run_tui(*, headless: bool = True, interval: float = 30.0) -> None:
