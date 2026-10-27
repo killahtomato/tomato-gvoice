@@ -206,6 +206,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--status", action="store_true",
         help="show watchdog service status and exit"
     )
+    watchdog_cmd.add_argument(
+        "--background",
+        action="store_true",
+        help="detach into the background (survives terminal close)",
+    )
 
     return parser
 
