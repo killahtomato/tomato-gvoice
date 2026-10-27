@@ -357,15 +357,15 @@ class TuiApp(App):
     .compose-from {
         height: 1;
         padding: 0 0 0 0;
-        color: $text-muted;
-        text-style: dim;
+        color: $accent;
+        text-style: bold;
     }
 
     .compose-recipient {
         height: 1;
         padding: 0 0 0 0;
-        color: $text-muted;
-        text-style: dim;
+        color: $accent;
+        text-style: bold;
     }
 
     #compose Input { width: 1fr; }
