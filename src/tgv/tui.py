@@ -328,11 +328,15 @@ class TuiApp(App):
     $accent: #b5403a;
     $background: #14141f;
     $surface: #252536;
+    $surface-dark: #1c1c2c;
     $text: #f5f5f5;
     $text-muted: #9a9aaa;
     $warning: #e0a800;
     $success: #4a7a2e;
     $error: #c43a2e;
+    /* Override default selection / highlight colors */
+    $selection-bg: #e0553d66;
+    $selection-fg: $text;
 
     #main { height: 1fr; }
 
@@ -403,8 +407,9 @@ class TuiApp(App):
     }
 
     MessageRow.outgoing .bubble {
-        background: $primary;
-        color: $text;
+        background: $surface-dark;
+        color: $primary;
+        border-right: thick $accent;
     }
 
     .thread-unread { color: $warning; }
