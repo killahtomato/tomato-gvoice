@@ -11,6 +11,7 @@ from playwright.sync_api import Error as PlaywrightError
 
 from . import contacts, reader, sender, session, watch
 from .text_utils import clean
+from .session import AuthenticationRequiredError
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$")
 _UNIT_MS = {
@@ -226,6 +227,7 @@ def handle_status(as_json: bool = False) -> None:
     watch_s = watch_module.watch_status()
     watchdog_s = watch_module.watchdog_status()
     tui_s = watch_module._process_status("tgv-tui", ["tgv.cli tui"])
+    worker_s = watch_module.tui_worker_status()
     chromium_main = watch_module._find_tgv_pids(
         f"user-data-dir={config.PROFILE_DIR}"
     )
@@ -238,6 +240,7 @@ def handle_status(as_json: bool = False) -> None:
             "watch": watch_s,
             "watchdog": watchdog_s,
             "tui": tui_s,
+            "browser_worker": worker_s,
             "chromium_main": len(chromium_main),
             "chromium_tui": len(chromium_tui),
         }, indent=2))
@@ -280,6 +283,23 @@ def handle_status(as_json: bool = False) -> None:
 
     # Chromium
     print(f"  chromium  : {len(chromium_main)} main, {len(chromium_tui)} tui")
+
+    # BrowserWorker
+    if worker_s["running"]:
+        if worker_s["stale"]:
+            status_label = "STALE"
+        elif not worker_s["thread_alive"]:
+            status_label = "DEAD"
+        else:
+            status_label = "running"
+        activity = f"{worker_s['last_task']} ({watch_module.fmt_uptime(worker_s.get('last_activity_seconds_ago'))} ago)"
+        auth = worker_s.get("auth_status", "unknown")
+        queue = worker_s.get("queue_depth", 0)
+        print(f"  worker    : {status_label:8s} | {activity} | auth: {auth} | queue: {queue}")
+    else:
+        last = worker_s.get("last_task", "unknown")
+        ago = watch_module.fmt_uptime(worker_s.get("last_activity_seconds_ago"))
+        print(f"  worker    : stopped  | last: {last} ({ago} ago)" if ago else f"  worker    : stopped")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -368,6 +388,8 @@ def main(argv: list[str] | None = None) -> int:
                 ))
         except AuthenticationRequiredError:
             print("Google Voice: not signed in. Run `tgv login` first.")
+        except Exception as exc:
+            print(f"Google Voice: could not check session ({exc.__class__.__name__})")
         return 0
 
     try:

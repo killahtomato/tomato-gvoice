@@ -34,6 +34,9 @@ OPEN_TUI = Path(os.environ.get("TGV_OPEN_TUI", Path.home() / ".local/bin/tgv-ope
 # Stats file for the watchdog's lock transition counters.
 WATCHDOG_STATS = BASE_DIR / "watchdog_stats.json"
 
+# State file for the TUI BrowserWorker (monitoring).
+TUI_WORKER_STATE = BASE_DIR / "tui_worker_state.json"
+
 # How long the cached contact map is trusted before it is refetched.
 CONTACTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 

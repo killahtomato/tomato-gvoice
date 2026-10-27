@@ -46,6 +46,21 @@ class BrowserWorker:
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
+    def _update_state(self, task: str | None = None, **extra) -> None:
+        """Write current worker state to disk for monitoring."""
+        state = {
+            "thread_alive": self._thread.is_alive(),
+            "last_task": task,
+            "last_activity": time.time(),
+            "queue_depth": self._requests.qsize(),
+        }
+        state.update(extra)
+        try:
+            config.TUI_WORKER_STATE.parent.mkdir(parents=True, exist_ok=True)
+            config.TUI_WORKER_STATE.write_text(json.dumps(state), encoding="utf-8")
+        except OSError:
+            pass
+
     def _run(self) -> None:
         from playwright.sync_api import sync_playwright
 
@@ -60,11 +75,13 @@ class BrowserWorker:
                         self._responses["init"] = ("auth_required", None)
                     else:
                         self._responses["init"] = ("ready", None)
+                    self._update_state(task="idle", auth_status="authenticated")
                     while True:
                         item = self._requests.get()
                         if item is None:
                             break
                         req_id, fn, args, kwargs = item
+                        self._update_state(task=fn.__name__)
                         try:
                             result = fn(page, *args, **kwargs)
                             with self._lock:
@@ -72,6 +89,7 @@ class BrowserWorker:
                         except Exception as exc:  # noqa: BLE001
                             with self._lock:
                                 self._responses[req_id] = ("err", exc)
+                        self._update_state(task="idle")
                 finally:
                     context.close()
         except Exception as exc:  # noqa: BLE001

@@ -197,6 +197,30 @@ def watchdog_status() -> dict:
     }
 
 
+def tui_worker_status() -> dict:
+    """Return the last known state of the TUI BrowserWorker."""
+    try:
+        state = json.loads(config.TUI_WORKER_STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"running": False, "message": "No TUI worker state found."}
+
+    last_activity = state.get("last_activity")
+    stale = bool(last_activity and (time.time() - last_activity > 60))
+    tui_running = _process_status("tgv-tui", ["tgv.cli tui"])["running"]
+
+    result = {
+        "running": tui_running,
+        "thread_alive": state.get("thread_alive", False),
+        "stale": stale,
+        "last_task": state.get("last_task"),
+        "queue_depth": state.get("queue_depth", 0),
+        "auth_status": state.get("auth_status", "unknown"),
+    }
+    if last_activity:
+        result["last_activity_seconds_ago"] = int(time.time() - last_activity)
+    return result
+
+
 def _save_state(notified: set[str]) -> None:
     # Keep the set bounded so the file doesn't grow forever.
     recent = sorted(notified)[-1000:]
