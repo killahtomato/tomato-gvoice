@@ -127,13 +127,6 @@ def decode_messages(
     return messages
 
 
-def all_messages(page: Page) -> list[dict]:
-    """Return every message in the loaded threads (no time filter)."""
-    payload, _page_size = capture_thread_list(page)
-    participants = dom_participants(page)
-    return decode_messages(payload, participants, since_ms=10 * 365 * 86_400_000)
-
-
 def decode_recent(
     payload: Any,
     participants: list[str | None],

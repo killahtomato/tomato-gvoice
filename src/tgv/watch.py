@@ -15,19 +15,9 @@ from pathlib import Path
 from playwright.sync_api import Error as PlaywrightError
 
 from . import config, reader, session
+from .text_utils import clean
 
-_BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 _POLL_WINDOW_MS = 5 * 60 * 1000  # look back 5 minutes on every poll
-_LOG_PATH = Path(os.environ.get("TGV_WATCH_LOG", config.BASE_DIR / "watch.log"))
-
-def _log() -> object:
-    """Return the debug log stream (lazy, opened on first use)."""
-    stream = getattr(_send_notification, "_log", None)
-    if stream is None:
-        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        stream = open(_LOG_PATH, "a", encoding="utf-8")
-        setattr(_send_notification, "_log", stream)
-    return stream
 
 TERMINAL_CANDIDATES = (
     os.environ.get("TGV_TERMINAL"),
@@ -40,8 +30,7 @@ TERMINAL_CANDIDATES = (
 )
 
 
-def _clean(text: str | None) -> str:
-    return _BIDI_RE.sub("", text or "").strip()
+
 
 
 def resolve_terminal(explicit: str | None = None) -> str | None:
@@ -104,43 +93,14 @@ def _save_state(notified: set[str]) -> None:
     )
 
 
-def _send_notification(
-    args: list[str],
-    thread: int | None,
-    terminal: str | None,
-    click_cmd: list[str] | None = None,
-) -> None:
-    """Run a blocking notify-send and run the click action if chosen."""
-    proc = subprocess.run(args, capture_output=True, text=True)
-    action = proc.stdout.strip()
-    if action == "default" and click_cmd:
-        log = _log()
-        print(f"[tgv-watch] notify-send action=default, running click_cmd={click_cmd}", file=log)
-        log.flush()
-        try:
-            subprocess.Popen(click_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except OSError as e:
-            print(f"[tgv-watch] click_cmd failed: {e}", file=log)
-            log.flush()
-    elif action == "default":
-        log = _log()
-        print(f"[tgv-watch] notify-send action=default, no click_cmd — opening terminal", file=log)
-        log.flush()
-        _open_terminal(thread, terminal)
-    else:
-        log = _log()
-        print(f"[tgv-watch] notify-send action={action!r} (no click)", file=log)
-        log.flush()
-
-
 def _notify(
     message: dict,
     as_json: bool,
     terminal: str | None,
     click_cmd: list[str] | None = None,
 ) -> None:
-    sender = _clean(message.get("participant")) or "unknown"
-    text = _clean(message.get("text"))
+    sender = clean(message.get("participant")) or "unknown"
+    text = clean(message.get("text"))
     if as_json:
         print(json.dumps({
             "sender": sender,
@@ -244,6 +204,8 @@ def watch(
                     _save_state(notified)
 
                 for m in new_messages:
+                    if m.get("direction") == "outgoing":
+                        continue
                     _notify(m, as_json, terminal, click_cmd=click_cmd)
                 if new_messages:
                     print(

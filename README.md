@@ -39,7 +39,8 @@ ln -sf "$PWD/tgv" ~/.local/bin/tgv
 ## Usage
 
 ```bash
-tgv login                    # one-time interactive sign-in (opens a browser window)
+tgv login                    # one-time interactive sign-in for the CLI (opens a browser window)
+tgv tui-login                # one-time interactive sign-in for the TUI (separate browser profile)
 tgv status                   # check the saved session
 tgv threads                  # list conversation previews
 tgv read 3                   # read a thread by index

@@ -182,19 +182,20 @@ def _on_voice_app(page: Page) -> bool:
     return parsed.hostname == "voice.google.com" and not parsed.path.startswith("/landing")
 
 
-def login(timeout_seconds: int = 300) -> bool:
-    """Open a headed browser and wait for the user to sign in interactively."""
-    config.PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+def _sign_in(
+    profile_dir: Path,
+    label: str,
+    timeout_seconds: int = 300,
+) -> bool:
+    """Shared sign-in flow for both the CLI and TUI browser profiles."""
+    profile_dir.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as playwright:
-        context = _new_context(playwright, headless=False)
+        context = _new_context(playwright, headless=False, profile_dir=profile_dir)
         try:
             page = _get_page(context)
             navigate_to_messages(page)
 
             if not _on_voice_app(page):
-                # The inbox redirects to the marketing page when signed out.
-                # Follow its "Sign in" link to Google's account chooser; the
-                # link is target=_blank/hidden in the nav, so navigate directly.
                 href = page.evaluate(
                     """() => {
                         const a = document.querySelector(
@@ -214,7 +215,7 @@ def login(timeout_seconds: int = 300) -> bool:
                         pass
 
             print(
-                "A browser window opened to Google Voice.\n"
+                f"A browser window opened to Google Voice{f' ({label})' if label else ''}.\n"
                 "Complete the Google sign-in (password + 2FA if prompted), "
                 "then return here.",
                 file=sys.stderr,
@@ -230,7 +231,7 @@ def login(timeout_seconds: int = 300) -> bool:
                 return False
 
             if is_authenticated(page):
-                print("Signed in successfully.", file=sys.stderr)
+                print(f"{label or 'Signed in'} successfully.", file=sys.stderr)
                 return True
             print("Sign-in did not complete.", file=sys.stderr)
             return False
@@ -238,51 +239,14 @@ def login(timeout_seconds: int = 300) -> bool:
             context.close()
 
 
+def login(timeout_seconds: int = 300) -> bool:
+    """Open a headed browser and wait for the user to sign in interactively."""
+    return _sign_in(config.PROFILE_DIR, "", timeout_seconds)
+
+
 def login_tui(timeout_seconds: int = 300) -> bool:
     """Sign in to the TUI's separate browser profile."""
-    config.TUI_PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    with sync_playwright() as playwright:
-        context = _new_context(playwright, headless=False, profile_dir=config.TUI_PROFILE_DIR)
-        try:
-            page = _get_page(context)
-            navigate_to_messages(page)
-
-            if not _on_voice_app(page):
-                href = page.evaluate(
-                    """() => {
-                        const a = document.querySelector(
-                            'a[href*="accounts.google.com"][href*="voice.google.com"]'
-                        );
-                        return a ? a.href : null;
-                    }"""
-                )
-                if href:
-                    page.goto(href)
-                    page.wait_for_load_state("networkidle", timeout=10_000)
-
-            print(
-                "A browser window opened to Google Voice for the TUI.\n"
-                "Complete the Google sign-in (password + 2FA if prompted), "
-                "then return here.",
-                file=sys.stderr,
-            )
-
-            deadline = time.time() + timeout_seconds
-            while time.time() < deadline:
-                time.sleep(2)
-                if _on_voice_app(page):
-                    break
-            else:
-                print("Timed out waiting for sign-in.", file=sys.stderr)
-                return False
-
-            if is_authenticated(page):
-                print("TUI signed in successfully.", file=sys.stderr)
-                return True
-            print("TUI sign-in did not complete.", file=sys.stderr)
-            return False
-        finally:
-            context.close()
+    return _sign_in(config.TUI_PROFILE_DIR, "TUI", timeout_seconds)
 
 
 def status(page: Page) -> dict:

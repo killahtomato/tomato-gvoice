@@ -27,12 +27,9 @@ from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from . import config, contacts, reader, sender, session
 from .session import AuthenticationRequiredError
+from .text_utils import clean
 
-_BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
-
-def _clean(text: str | None) -> str:
-    return _BIDI_RE.sub("", text or "").strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -45,7 +42,8 @@ class BrowserWorker:
         self._profile_dir = profile_dir or config.TUI_PROFILE_DIR
         self._headless = headless
         self._requests: queue.Queue = queue.Queue()
-        self._responses: queue.Queue = queue.Queue()
+        self._responses: dict[str, tuple[str, Any]] = {}
+        self._lock = threading.Lock()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
 
@@ -60,34 +58,45 @@ class BrowserWorker:
                 try:
                     page = session.get_page(context)
                     if not session.is_authenticated(page):
-                        self._responses.put(("auth_required", None))
+                        self._responses["init"] = ("auth_required", None)
                     else:
-                        self._responses.put(("ready", None))
+                        self._responses["init"] = ("ready", None)
                     while True:
                         item = self._requests.get()
                         if item is None:
                             break
-                        fn, args, kwargs = item
+                        req_id, fn, args, kwargs = item
                         try:
                             result = fn(page, *args, **kwargs)
-                            self._responses.put(("ok", result))
+                            with self._lock:
+                                self._responses[req_id] = ("ok", result)
                         except Exception as exc:  # noqa: BLE001
-                            self._responses.put(("err", exc))
+                            with self._lock:
+                                self._responses[req_id] = ("err", exc)
                 finally:
                     context.close()
         except Exception as exc:  # noqa: BLE001
-            self._responses.put(("error", exc))
+            with self._lock:
+                self._responses["init"] = ("error", exc)
+
+    def _wait_for(self, req_id: str) -> tuple[str, Any]:
+        while True:
+            with self._lock:
+                if req_id in self._responses:
+                    return self._responses.pop(req_id)
+            time.sleep(0.01)
 
     def start(self) -> None:
-        status, payload = self._responses.get()
+        status, payload = self._wait_for("init")
         if status == "error":
             raise payload
         if status == "auth_required":
             raise AuthenticationRequiredError()
 
     def call(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:
-        self._requests.put((fn, args, kwargs))
-        status, result = self._responses.get()
+        req_id = f"{threading.current_thread().ident}-{time.time_ns()}"
+        self._requests.put((req_id, fn, args, kwargs))
+        status, result = self._wait_for(req_id)
         if status == "err":
             raise result
         return result
@@ -220,10 +229,12 @@ class SearchScreen(ModalScreen):
         status = self.query_one("#search-status", Static)
         status.update(f"{len(messages)} result(s) for: {query}")
         results = self.query_one("#search-results", ListView)
+        results._thread_indices = {}
         for i, msg in enumerate(messages):
-            who = _clean(msg.get("participant")) or "?"
+            who = clean(msg.get("participant")) or "?"
             text = (msg.get("text") or "").splitlines()[0]
             thread_idx = msg.get("thread", 0) - 1
+            results._thread_indices[i] = thread_idx
             label = f"{who}: {text}\n     [thread {thread_idx + 1}]"
             results.append(ListItem(Static(label), id=f"result-{i}"))
 
@@ -615,7 +626,7 @@ class TuiApp(App):
         for thread in threads:
             marker = "●" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
-            participant = _clean(thread.get("participant")) or "unknown"
+            participant = clean(thread.get("participant")) or "unknown"
             # Truncate preview to fit sender line and preview line.
             max_len = max(10, sidebar_width - len(participant) - 2)
             if len(preview) > max_len:
@@ -677,7 +688,7 @@ class TuiApp(App):
             static.update("Select a conversation")
             return
         thread = self._threads[self._selected]
-        name = _clean(thread.get("participant"))
+        name = clean(thread.get("participant"))
         number = self._lookup_number(name)
         if name and number:
             static.update(f"Messaging: {name} ({number})")
@@ -730,7 +741,7 @@ class TuiApp(App):
         if not self._threads or self._selected is None:
             return
         thread = self._threads[self._selected]
-        recipient = _clean(thread.get("participant")) or "unknown"
+        recipient = clean(thread.get("participant")) or "unknown"
         known = self._worker.call(contacts.load)
         number, kind = contacts.resolve(recipient, known)
         if number is None:
@@ -763,11 +774,11 @@ class TuiApp(App):
         # is already viewing the thread, the message appears in the bubble area.
         selected_name = None
         if self._selected is not None and self._threads:
-            selected_name = _clean(
+            selected_name = clean(
                 self._threads[self._selected].get("participant")
             )
         for msg in messages:
-            msg_name = _clean(msg.get("participant"))
+            msg_name = clean(msg.get("participant"))
             if msg_name == selected_name:
                 continue
             self.call_from_thread(
@@ -822,18 +833,9 @@ class TuiApp(App):
     def action_mark_read(self) -> None:
         if self._selected is None:
             return
-        thread = self._threads[self._selected]
-        number = _clean(thread.get("participant")) or "unknown"
-        def do_mark():
-            try:
-                self._worker.call(reader.list_threads, limit=1)  # refresh session
-                # Mark read via the API would go here; for now update local state
-                thread["unread"] = False
-                self.call_from_thread(self.refresh_threads)
-            except Exception:
-                pass
-        import threading
-        threading.Thread(target=do_mark, daemon=True).start()
+        # Navigating to the thread marks it as read on Google's side.
+        # Reload so the unread state reflects the server.
+        self.load_thread(self._selected)
 
     def action_quit(self) -> None:
         self.exit()

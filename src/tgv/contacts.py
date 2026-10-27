@@ -18,14 +18,13 @@ from . import config
 from .reader import capture_thread_list, dom_participants
 from .session import VoiceError
 
-_BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
-
+from .text_utils import clean
 
 def normalize_name(value: str | None) -> str:
     """Lowercase, strip bidi/control chars and collapse whitespace."""
     if not value:
         return ""
-    cleaned = _BIDI_RE.sub("", value)
+    cleaned = clean(value)
     return " ".join(cleaned.split()).lower()
 
 
@@ -33,7 +32,7 @@ def normalize_number(value: str | None) -> str:
     """Canonicalize a phone number: US numbers become +1..., short codes stay."""
     if not value:
         return ""
-    cleaned = _BIDI_RE.sub("", value).strip()
+    cleaned = clean(value)
     has_plus = cleaned.startswith("+")
     digits = re.sub(r"\D", "", cleaned)
     if not digits:
@@ -76,7 +75,7 @@ def decode_contacts(
         name = participants[idx] if idx < len(participants) else None
         if not name or not number:
             continue
-        name = _BIDI_RE.sub("", name).strip()
+        name = clean(name)
         norm = normalize_number(number)
         if not name or not norm:
             continue
@@ -115,7 +114,7 @@ def fetch_contacts(page: Page) -> dict[str, list[str]]:
     contacts = decode_contacts(payload, participants)
 
     for name, number in _dom_contact_list(page):
-        key = _BIDI_RE.sub("", name).strip()
+        key = clean(name)
         norm = normalize_number(number)
         if not key or not norm:
             continue

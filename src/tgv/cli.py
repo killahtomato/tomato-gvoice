@@ -10,6 +10,7 @@ import sys
 from playwright.sync_api import Error as PlaywrightError
 
 from . import contacts, reader, sender, session, watch
+from .text_utils import clean
 
 _DURATION_RE = re.compile(r"^(\d+)([smhdw])$")
 _UNIT_MS = {
@@ -19,15 +20,6 @@ _UNIT_MS = {
     "d": 86_400_000,
     "w": 604_800_000,
 }
-_BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
-
-
-def clean(text: str | None) -> str | None:
-    """Strip invisible bidi/control characters the web app inserts."""
-    if text is None:
-        return None
-    return _BIDI_RE.sub("", text).strip()
-
 
 def parse_duration(value: str) -> int:
     match = _DURATION_RE.match(value.strip().lower())
