@@ -713,7 +713,17 @@ class TuiApp(App):
             return
         # Don't rebuild the sidebar on auto-poll — it steals the highlight.
         # The user can press 'r' to refresh the thread list manually.
+        # Only notify about messages in OTHER conversations — if the user
+        # is already viewing the thread, the message appears in the bubble area.
+        selected_name = None
+        if self._selected is not None and self._threads:
+            selected_name = _clean(
+                self._threads[self._selected].get("participant")
+            )
         for msg in messages:
+            msg_name = _clean(msg.get("participant"))
+            if msg_name == selected_name:
+                continue
             self.call_from_thread(
                 self.notify,
                 f"{msg.get('participant') or 'unknown'}: {msg.get('text') or ''}",
