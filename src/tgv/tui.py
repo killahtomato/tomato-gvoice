@@ -155,19 +155,30 @@ class HelpScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "[b]🍅 Tomato-gVoice[/b]\n\n"
-            "  (__)   j / ↓   next thread\n"
-            "  /  \\   k / ↑   previous thread\n"
-            "  \\__/   Enter   open thread\n"
-            " 🍅🍅🍅   r       refresh\n"
-            "          c       compose new message\n"
-            "  ╭────╮  /       search\n"
-            "  │tom│  g       contacts\n"
-            "  ╰────╯  m       mark thread read\n"
-            "  ──────  ?       this help\n"
-            "  ╲    ╱  q       quit\n"
-            "   ╲  ╱\n"
-            "    ╲╱\n",
+            "        🍅 Tomato-gVoice\n\n"
+            "        ⢀⣤⡄\n"
+            "      ⢀⣠⠞⠁\n"
+            "    ⢀⣀⣸⣿⣿⣦⣀⣠⠴⠛⠛⠂\n"
+            "    ⢀⣤⠘⠉⠻⣿⣿⣿⣿⣿⠛⠓⠦⣤⣀\n"
+            "  ⢀⡴⠋⠀⠀⠀⠘⠛⠛⣿⡋⠉⠁⠀⠀⠉⢳⣄\n"
+            "  ⡞⠁⠀⠀⠀⠀⠀⠀⠀⠸⠇⠀⠀⠀⠀⠀⠈⢳\n"
+            "  ⢹⠁⠀⠀⢠⣄⡀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⡄⢳\n"
+            "  ⢸⡀⠀⠀⠈⠙⠿⢷⣶⣤⣀⠀⣀⣀⣴⣶⣿⠋⠁⣸\n"
+            "  ⠈⣧⠀⠰⠾⠛⠛⠛⠋⠉⠛⠀⠘⠛⠛⠛⠛⠛⢻⡇\n"
+            "    ⠘⣷⡀⠀⠀⠐⣾⡟⠀⠀⠀⣀⡿⠁\n"
+            "      ⠈⠳⣦⡀⠀⠉⠁⠀⣀⣠⡾⠋\n"
+            "          ⠈⠙⠳⠶⢶⣶⣶⡶⠚⠁\n"
+            "\n"
+            "  j / ↓   next thread\n"
+            "  k / ↑   previous thread\n"
+            "  Enter   open thread\n"
+            "  r       refresh\n"
+            "  c       compose new message\n"
+            "  /       search\n"
+            "  g       contacts\n"
+            "  m       mark thread read\n"
+            "  ?       this help\n"
+            "  q       quit\n",
             id="help",
         )
 
