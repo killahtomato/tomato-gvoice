@@ -341,7 +341,8 @@ class TuiApp(App):
     #sidebar ListView { height: 1fr; }
 
     #sidebar ListItem {
-        height: 2;
+        height: auto;
+        min-height: 2;
         padding: 0 1;
         border-bottom: solid $surface;
     }
