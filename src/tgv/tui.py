@@ -19,7 +19,6 @@ from typing import Any, Callable
 
 from textual import work
 from textual.app import App, ComposeResult
-from rich.text import Text
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
@@ -33,18 +32,6 @@ _BIDI_RE = re.compile(r"[\u202a-\u202e\u2066-\u2069\u200e\u200f\ufeff]")
 
 def _clean(text: str | None) -> str:
     return _BIDI_RE.sub("", text or "").strip()
-
-
-class TruncatedStatic(Static):
-    """Static that does not wrap and truncates with ellipsis."""
-
-    def render(self) -> Text:
-        text = super().render()
-        if isinstance(text, str):
-            text = Text.from_markup(text)
-        text.no_wrap = True
-        text.overflow = "ellipsis"
-        return text
 
 
 # --------------------------------------------------------------------------- #
@@ -539,14 +526,31 @@ class TuiApp(App):
             return
         sidebar.clear()
         if not threads:
-            sidebar.append(ListItem(TruncatedStatic("No conversations.")))
+            sidebar.append(ListItem(Static("No conversations.")))
             return
+        # Scale truncation to sidebar width (roughly 32% of terminal).
+        sw = sidebar.size.width
+        sidebar_width = max(22, sw - 4) if sw > 0 else 30
         for thread in threads:
             marker = "●" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
             participant = _clean(thread.get("participant")) or "unknown"
+            # Truncate preview to fit sender line and preview line.
+            max_len = max(10, sidebar_width - len(participant) - 2)
+            if len(preview) > max_len:
+                preview = preview[: max_len - 1] + "…"
             label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
-            sidebar.append(ListItem(TruncatedStatic(label)))
+            sidebar.append(ListItem(Static(label)))
+        for thread in threads:
+            marker = "●" if thread.get("unread") else " "
+            preview = (thread.get("preview") or "").splitlines()[0]
+            participant = _clean(thread.get("participant")) or "unknown"
+            # Truncate preview to fit sender line and preview line.
+            max_len = max(10, sidebar_width - len(participant) - 2)
+            if len(preview) > max_len:
+                preview = preview[: max_len - 1] + "…"
+            label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
+            sidebar.append(ListItem(Static(label)))
         if threads:
             sidebar.index = 0
             self._selected = 0
