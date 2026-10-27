@@ -157,18 +157,18 @@ class HelpScreen(ModalScreen):
         art = "\n".join([
             "        🍅 Tomato-gVoice",
             "",
-        "⠀⠀⠀⠀⠀⠀⢀⠀⠀⠀⠀⠀⣤⠀⠀⠀⠀⠀⠀⠀⠀⠀"
-        "⠀⠀⠀⠀⠀⠀⠈⠻⣆⢀⣠⠞⠁⠀⠀⢀⣤⠀⠀⠀⠀⠀"
-        "⠀⠀⠀⠀⠀⠀⢀⣀⣸⣿⣿⣦⣀⣠⣼⠟⠛⠂⠀⠀⠀⠀"
-        "⠀⠀⠀⢀⣤⠘⠉⠻⣿⣿⣿⣿⣿⣿⠛⠓⠦⣤⣀⠀⠀⠀"
-        "⠀⢀⡴⠋⠀⠀⠀⠀⠘⠛⠛⣿⡋⠉⠁⠀⠀⠀⠉⢳⣄⠀"
-        "⠀⡞⠁⠀⠀⠀⠀⠀⠀⠀⠀⠸⠇⠀⠀⠀⠀⠀⠀⠀⠹⡆"
-        "⢸⠁⠀⠀⢠⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⡄⢳"
-        "⢸⡀⠀⠀⠈⠙⠿⢷⣶⣤⣀⠀⠀⣀⣀⣴⣶⣿⠋⠁⠀⣸"
-        "⠈⣇⠀⠰⠾⠛⠛⠛⠋⠉⠛⠀⠀⠈⠛⠛⠛⠛⠛⠛⢻⡇"
-        "  ⣧⡀⠀⠀⠀⠀⠀⠀⠀⢾⣿⡟⠀⠀⠀⠀⠀⣠⡟⠀"
-        "  ⠈⠳⣦⡀⠀⠀⠀⠀⠀⠀⠉⠀⠀⠀⠀⣠⡾⠋⠀⠀"
-        "    ⠈⠙⠳⠤⢤⣤⣤⣤⡤⠤⠴⠚⠋⠁⠀⠀⠀⠀"
+            " ⠀⢀⣤⡀",
+            " ⠈⠻⣆⡀⣠⠞⠁",
+            " ⢀⣀⣸⣿⣿⣦⣀⣠⣤⠾⠛⠛⠂",
+            " ⢀⣤⠘⠉⠻⣿⣿⣿⣿⣿⠛⠓⠦⣤⣀",
+            " ⢀⡴⠋⠈⠛⠛⣿⣿⣿⠛⠓⠦⣤⣀",
+            " ⡞⠁",
+            " ⢸⡆⢠⣄⡀",
+            " ⢸⡀⠈⠙⠿⢷⣶⣤⣀",
+            " ⠈⣇⠰⠾⠛⠛⠛⠛",
+            " ⠘⣧⡀⢾⣿⡟",
+            " ⠈⠳⣦⡀",
+            " ⠈⠙⠳⠤⢤⣤⣤⣤",
             "",
             "",
             "",
@@ -183,7 +183,8 @@ class HelpScreen(ModalScreen):
             "  ?       this help",
             "  q       quit",
         ])
-        yield Static(art, id="help")
+        with VerticalScroll():
+            yield Static(art, id="help")
 
 
 class SearchScreen(ModalScreen):
@@ -446,9 +447,8 @@ class TuiApp(App):
     #help {
         padding: 1 2;
         width: auto;
-        height: 100%;
+        height: auto;
         min-height: 12;
-        overflow-y: auto;
     }
 
     ModalScreen {
