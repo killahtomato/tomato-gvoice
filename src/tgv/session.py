@@ -300,7 +300,12 @@ def status(page: Page) -> dict:
                 .map(el => el.getAttribute('aria-label'))
                 .filter(Boolean);
             const accountLabel = labels.find(l => /google account|account:/i.test(l)) || null;
-            return { accountLabel, title: document.title };
+            // Look for the Google Voice phone number in the header/nav area.
+            const phoneRe = /(\\+?1?[-.\\s]?)?\\(?\\d{3}\\)?[-.\\s]?\\d{3}[-.\\s]?\\d{4}/;
+            const allText = document.body.innerText || '';
+            const phoneMatch = allText.match(phoneRe);
+            const phone = phoneMatch ? phoneMatch[0].trim() : null;
+            return { accountLabel, phone, title: document.title };
         }"""
     )
     return {"authenticated": True, "url": page.url, **data}

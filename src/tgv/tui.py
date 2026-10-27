@@ -139,12 +139,12 @@ class ThreadList(ListView):
 
 
 class ComposeBar(Vertical):
-    """The compose area: recipient info above the input."""
+    """The compose area: sender info, recipient info, and input."""
 
     def compose(self) -> ComposeResult:
+        yield Static("Messaging from: …", id="compose-from", classes="compose-from")
         yield Static("Select a conversation", id="compose-recipient", classes="compose-recipient")
         yield Input(placeholder="Type a message…", id="compose-input")
-        yield Static("i: type  Esc: list", classes="send-hint")
 
 
 # --------------------------------------------------------------------------- #
@@ -354,6 +354,13 @@ class TuiApp(App):
         padding: 0 1;
     }
 
+    .compose-from {
+        height: 1;
+        padding: 0 0 0 0;
+        color: $text-muted;
+        text-style: dim;
+    }
+
     .compose-recipient {
         height: 1;
         padding: 0 0 0 0;
@@ -362,8 +369,6 @@ class TuiApp(App):
     }
 
     #compose Input { width: 1fr; }
-
-    .send-hint { width: auto; padding: 1 1 0 0; color: $text-muted; }
 
     MessageRow { height: auto; width: 100%; }
 
@@ -399,7 +404,6 @@ class TuiApp(App):
     #compose-hint { padding: 0 1; color: $text-muted; }
     #contacts-filter { margin: 1; }
     #contacts-list { height: 1fr; }
-    .send-hint { width: auto; padding: 1 1 0 0; color: $text-muted; }
     """
 
     BINDINGS = [
@@ -498,7 +502,22 @@ class TuiApp(App):
             self.query_one("#sidebar").focus()
         except NoMatches:
             self.call_after_refresh(self._focus_sidebar)
+        self._load_phone_number()
         self.set_interval(self._interval, self.poll)
+
+    def _load_phone_number(self) -> None:
+        """Fetch the signed-in phone number and display it."""
+        def fetch():
+            try:
+                status = self._worker.call(session.status)
+            except Exception:
+                return
+            phone = status.get("phone") or "unknown"
+            try:
+                self.query_one("#compose-from", Static).update(f"Messaging from: {phone}")
+            except NoMatches:
+                self.call_after_refresh(lambda: self._load_phone_number())
+        threading.Thread(target=fetch, daemon=True).start()
 
     def _refresh_on_mount(self) -> None:
         try:
