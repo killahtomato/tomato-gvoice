@@ -446,7 +446,7 @@ class TuiApp(App):
         width: auto;
         height: auto;
         min-height: 12;
-        max-height: 90%;
+        dock: screen;
         overflow-y: auto;
     }
 
