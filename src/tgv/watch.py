@@ -243,12 +243,14 @@ def _notify(
     # quickshell handles notification clicks via the omarchy-exec-argv hint.
     # omarchy-notification-send (via busctl) sets the hint JSON correctly;
     # notify-send does not reliably relay it to quickshell's daemon.
+    # --app-name sets the displayed sender (instead of the default "omarchy-action").
+    app_name_flag = ["--app-name", "Tomato-gVoice"]
     if click_cmd:
-        args = ["omarchy-notification-send", title, text, "--exec", *click_cmd]
+        args = ["omarchy-notification-send", *app_name_flag, title, text, "--exec", *click_cmd]
     elif terminal and thread:
-        args = ["omarchy-notification-send", title, text, "--exec", *_terminal_command(terminal, thread)]
+        args = ["omarchy-notification-send", *app_name_flag, title, text, "--exec", *_terminal_command(terminal, thread)]
     else:
-        args = ["omarchy-notification-send", title, text]
+        args = ["omarchy-notification-send", *app_name_flag, title, text]
     subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
