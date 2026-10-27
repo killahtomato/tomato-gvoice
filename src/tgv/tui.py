@@ -561,13 +561,12 @@ class TuiApp(App):
             self._selected = idx
             sidebar.index = idx
             self.load_thread(idx)
-        self._rebuilding = False
-        # Restore the visual highlight after the widget has refreshed.
+        # Keep _rebuilding True until after refresh so ListView.Selected
+        # events that fire during rebuild are ignored.
         self.call_after_refresh(lambda: self._restore_selection(idx))
 
     def _restore_selection(self, idx: int) -> None:
-        if self._rebuilding:
-            return
+        self._rebuilding = False
         try:
             sidebar = self.query_one("#sidebar", ThreadList)
         except NoMatches:
