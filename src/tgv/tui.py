@@ -183,8 +183,7 @@ class HelpScreen(ModalScreen):
             "  ?       this help",
             "  q       quit",
         ])
-        with VerticalScroll():
-            yield Static(art, id="help")
+        yield Static(art, id="help")
 
 
 class SearchScreen(ModalScreen):
