@@ -545,6 +545,8 @@ class TuiApp(App):
             sidebar.index = 0
             self._selected = 0
             self.load_thread(0)
+        elif self._selected is not None and self._selected < len(threads):
+            sidebar.index = self._selected
 
     @work(thread=True)
     def load_thread(self, index: int) -> None:
