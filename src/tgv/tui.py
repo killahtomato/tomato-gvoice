@@ -711,8 +711,7 @@ class TuiApp(App):
                 self._last_ts = max(m["_ts"] for m in messages)
         except Exception:  # noqa: BLE001
             return
-        # Don't rebuild the sidebar on auto-poll — it steals the highlight.
-        # The user can press 'r' to refresh the thread list manually.
+        self.call_from_thread(self.refresh_threads)
         # Only notify about messages in OTHER conversations — if the user
         # is already viewing the thread, the message appears in the bubble area.
         selected_name = None
