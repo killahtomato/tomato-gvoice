@@ -416,6 +416,7 @@ class TuiApp(App):
         self._threads: list[dict] = []
         self._selected: int | None = None
         self._last_ts: float = 0.0
+        self._rebuilding = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -524,7 +525,9 @@ class TuiApp(App):
             sidebar = self.query_one("#sidebar", ThreadList)
         except NoMatches:
             return
+        self._rebuilding = True
         sidebar.clear()
+        self._rebuilding = False
         if not threads:
             sidebar.append(ListItem(Static("No conversations.")))
             return
@@ -570,6 +573,8 @@ class TuiApp(App):
 
     # -- events ------------------------------------------------------------ #
     def on_list_view_selected(self, event: ListView.Selected) -> None:
+        if self._rebuilding:
+            return
         self._selected = event.index
         self.load_thread(event.index)
 
