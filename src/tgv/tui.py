@@ -444,9 +444,8 @@ class TuiApp(App):
     #help {
         padding: 1 2;
         width: auto;
-        height: auto;
+        height: 100%;
         min-height: 12;
-        dock: screen;
         overflow-y: auto;
     }
 
