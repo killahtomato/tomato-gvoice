@@ -190,6 +190,17 @@ def _is_profile_locked(exc: BaseException) -> bool:
     return "processsingleton" in text or "profile" in text and "lock" in text
 
 
+def _daemonize() -> None:
+    """Double-fork into a background process so the watcher survives terminal close."""
+    if os.fork() > 0:
+        sys.exit(0)
+    os.setsid()
+    if os.fork() > 0:
+        sys.exit(0)
+    sys.stdout = open(os.devnull, "w")
+    sys.stderr = open(os.devnull, "w")
+
+
 def _find_tgv_processes(pattern: str) -> list[tuple[int, str]]:
     """Return (pid, cmdline) for processes matching pattern."""
     try:
