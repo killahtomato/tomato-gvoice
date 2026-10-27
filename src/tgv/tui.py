@@ -154,33 +154,34 @@ class HelpScreen(ModalScreen):
     BINDINGS = [("escape", "dismiss", "Close")]
 
     def compose(self) -> ComposeResult:
-        yield Static(
-            "        🍅 Tomato-gVoice\n\n"
-            "        ⢀⣤⡄\n"
-            "      ⢀⣠⠞⠁\n"
-            "    ⢀⣀⣸⣿⣿⣦⣀⣠⠴⠛⠛⠂\n"
-            "    ⢀⣤⠘⠉⠻⣿⣿⣿⣿⣿⠛⠓⠦⣤⣀\n"
-            "  ⢀⡴⠋⠀⠀⠀⠘⠛⠛⣿⡋⠉⠁⠀⠀⠉⢳⣄\n"
-            "  ⡞⠁⠀⠀⠀⠀⠀⠀⠀⠸⠇⠀⠀⠀⠀⠀⠈⢳\n"
-            "  ⢹⠁⠀⠀⢠⣄⡀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⡄⢳\n"
-            "  ⢸⡀⠀⠀⠈⠙⠿⢷⣶⣤⣀⠀⣀⣀⣴⣶⣿⠋⠁⣸\n"
-            "  ⠈⣧⠀⠰⠾⠛⠛⠛⠋⠉⠛⠀⠘⠛⠛⠛⠛⠛⢻⡇\n"
-            "    ⠘⣷⡀⠀⠀⠐⣾⡟⠀⠀⠀⣀⡿⠁\n"
-            "      ⠈⠳⣦⡀⠀⠉⠁⠀⣀⣠⡾⠋\n"
-            "          ⠈⠙⠳⠶⢶⣶⣶⡶⠚⠁\n"
-            "\n"
-            "  j / ↓   next thread\n"
-            "  k / ↑   previous thread\n"
-            "  Enter   open thread\n"
-            "  r       refresh\n"
-            "  c       compose new message\n"
-            "  /       search\n"
-            "  g       contacts\n"
-            "  m       mark thread read\n"
-            "  ?       this help\n"
-            "  q       quit\n",
-            id="help",
-        )
+        art = "\n".join([
+            "        🍅 Tomato-gVoice",
+            "",
+            " ⠀⢀⠀⢀⣤",
+            " ⠀⠈⠻⣆⢀⣠⠞⠁",
+            " ⢀⣀⣸⣿⣿⣦⣀⣠⣤⠾⠛⠛⠂",
+            " ⢀⣤⠘⠉⠻⣿⣿⣿⣿⣿⠛⠓⠦⣤⣀",
+            " ⢀⡴⠋⠈⠛⠛⣿⣿⣿⠛⠓⠦⣤⣀",
+            " ⡞⠁",
+            " ⢸⡆⢠⣄⡀",
+            " ⢸⡀⠈⠙⠿⢷⣶⣤⣀",
+            " ⠈⣇⠰⠾⠛⠛⠛⠛",
+            " ⠘⣧⡀⢾⣿⡟",
+            " ⠈⠳⣦⡀",
+            " ⠈⠙⠳⠤⢤⣤⣤⣤",
+            "",
+            "  j / ↓   next thread",
+            "  k / ↑   previous thread",
+            "  Enter   open thread",
+            "  r       refresh",
+            "  c       compose new message",
+            "  /       search",
+            "  g       contacts",
+            "  m       mark thread read",
+            "  ?       this help",
+            "  q       quit",
+        ])
+        yield Static(art, id="help")
 
 
 class SearchScreen(ModalScreen):
