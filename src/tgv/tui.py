@@ -335,8 +335,7 @@ class TuiApp(App):
     $success: #4a7a2e;
     $error: #c43a2e;
     /* Override default selection / highlight colors */
-    $selection-bg: #e0553d66;
-    $selection-fg: $text;
+    $selection: #e0553d66;
 
     #main { height: 1fr; }
 
