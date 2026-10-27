@@ -177,6 +177,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--status", action="store_true",
         help="show watch service status and exit"
     )
+    watch_cmd.add_argument(
+        "--click-cmd",
+        nargs="+",
+        default=None,
+        help="command to run when a notification is clicked (default: open TUI in foot)",
+    )
 
     tui_cmd = sub.add_parser("tui", help="open the interactive terminal UI")
     tui_cmd.add_argument(
