@@ -444,14 +444,13 @@ class TuiApp(App):
     #help {
         padding: 1 2;
         width: auto;
-        height: 12;
-        min-width: 30;
+        height: auto;
+        max-height: 90%;
+        overflow-y: auto;
     }
 
     ModalScreen {
         align: center middle;
-        height: 90%;
-        width: 90%;
     }
     #search-input { margin: 1; }
     #search-results { height: 1fr; }
