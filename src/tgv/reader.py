@@ -328,8 +328,6 @@ def read_thread(page: Page, ref: str, limit: int = 100) -> dict:
             );
             return {
                 messages,
-                // Use the contact name if available, otherwise fall back to the
-                // phone number (shown as "mobile - ..." when only a number is known).
                 participant: headerTitle or secondary,
                 title: secondary or headerTitle,
                 totalMessages: items.length,
