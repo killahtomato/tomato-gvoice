@@ -674,7 +674,8 @@ class TuiApp(App):
                 self._last_ts = max(m["_ts"] for m in messages)
         except Exception:  # noqa: BLE001
             return
-        self.call_from_thread(self.refresh_threads)
+        # Don't rebuild the sidebar on auto-poll — it steals the highlight.
+        # The user can press 'r' to refresh the thread list manually.
         for msg in messages:
             self.call_from_thread(
                 self.notify,
