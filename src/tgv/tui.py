@@ -139,12 +139,12 @@ class ThreadList(ListView):
 
 
 class ComposeBar(Vertical):
-    """The compose area: sender info, recipient info, and input."""
+    """The compose area: recipient info above the input."""
 
     def compose(self) -> ComposeResult:
-        yield Static("Messaging from: …", id="compose-from", classes="compose-from")
         yield Static("Select a conversation", id="compose-recipient", classes="compose-recipient")
         yield Input(placeholder="Type a message…", id="compose-input")
+        yield Static("Messaging from: …", id="compose-from", classes="compose-from")
 
 
 # --------------------------------------------------------------------------- #
