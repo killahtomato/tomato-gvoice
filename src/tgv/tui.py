@@ -568,7 +568,11 @@ class TuiApp(App):
 
     def _set_messages(self, thread: dict) -> None:
         pane = self.query_one("#messages", MessagePane)
-        pane.set_messages(thread.get("messages", []))
+        participant = thread.get("participant")
+        messages = thread.get("messages", [])
+        for msg in messages:
+            msg["participant"] = participant
+        pane.set_messages(messages)
 
     # -- events ------------------------------------------------------------ #
     def on_list_view_selected(self, event: ListView.Selected) -> None:
