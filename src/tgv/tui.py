@@ -322,21 +322,17 @@ class TuiApp(App):
 
     TITLE = "🍅 Tomato-gVoice"
 
-    THEME = {
-        "primary": "#ff6347",
-        "accent": "#dc143c",
-        "background": "#1a1a2e",
-        "surface": "#2d2d44",
-        "surface-dark": "#1e1e30",
-        "text": "#eaeaea",
-        "text-muted": "#a0a0b0",
-        "warning": "#ffd700",
-        "success": "#5a8f3a",
-        "error": "#dc143c",
-    }
-
     CSS = """
-    Screen { layout: vertical; }
+    /* Tomato palette — override before textual defaults */
+    $primary: #ff6347;
+    $accent: #dc143c;
+    $background: #1a1a2e;
+    $surface: #2d2d44;
+    $text: #eaeaea;
+    $text-muted: #a0a0b0;
+    $warning: #ffd700;
+    $success: #5a8f3a;
+    $error: #dc143c;
 
     #main { height: 1fr; }
 
@@ -416,18 +412,12 @@ class TuiApp(App):
 
     /* Branding */
     .brand-header {
-        height: 1;
-        text-style: bold;
         color: $primary;
-        text-align: center;
-        padding: 0 1;
+        text-style: bold;
     }
 
     .brand-footer {
-        height: 1;
-        color: $text-muted;
-        text-align: center;
-        padding: 0 1;
+        color: $accent;
     }
 
     #help { padding: 1 2; }
@@ -466,21 +456,13 @@ class TuiApp(App):
         self._contacts_cache: dict[str, list[str]] | None = None
 
     def compose(self) -> ComposeResult:
-        yield Static(
-            "🍅  Tomato-gVoice",
-            classes="brand-header",
-            id="brand-header",
-        )
+        yield Header(show_clock=True, classes="brand-header")
         with Horizontal(id="main"):
             yield ThreadList(id="sidebar")
             with Vertical(id="conversation"):
                 yield MessagePane(id="messages")
                 yield ComposeBar(id="compose")
-        yield Static(
-            "r: refresh  c: compose  /: search  g: contacts  q: quit",
-            classes="brand-footer",
-            id="brand-footer",
-        )
+        yield Footer(classes="brand-footer")
 
     def on_mount(self) -> None:
         self._write_pid()
