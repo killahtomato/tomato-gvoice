@@ -249,7 +249,10 @@ def handle_status(as_json: bool = False) -> None:
 
     # Watch
     w_mode = watch_s["mode"]
-    w_uptime = watch_module.fmt_uptime(watch_s.get("uptime_seconds"))
+    if watch_s["running"]:
+        w_uptime = f"uptime {watch_module.fmt_uptime(watch_s.get('uptime_seconds'))}"
+    else:
+        w_uptime = f"stopped {watch_module.fmt_uptime(watch_s.get('stopped_since_seconds'))}"
     w_pids = ", ".join(str(p) for p in watch_s["pids"]) if watch_s["pids"] else ""
     watch_line = f"  watch     : {w_mode:8s} | {w_uptime} | {watch_s['notified_count']} notified"
     if w_pids:
@@ -258,7 +261,10 @@ def handle_status(as_json: bool = False) -> None:
 
     # Watchdog
     d_mode = watchdog_s["mode"]
-    d_uptime = watch_module.fmt_uptime(watchdog_s.get("uptime_seconds"))
+    if watchdog_s["running"]:
+        d_uptime = f"uptime {watch_module.fmt_uptime(watchdog_s.get('uptime_seconds'))}"
+    else:
+        d_uptime = f"stopped {watch_module.fmt_uptime(watchdog_s.get('stopped_since_seconds'))}"
     d_pids = ", ".join(str(p) for p in watchdog_s["pids"]) if watchdog_s["pids"] else ""
     dog_line = f"  watchdog  : {d_mode:8s} | {d_uptime} | {watchdog_s['lock_creations']} on, {watchdog_s['lock_removals']} off"
     if d_pids:
@@ -290,7 +296,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "watch":
         if args.status:
             from . import watch as watch_module
-            print(json.dumps(watch_module.watch_status(), indent=2))
+            s = watch_module.watch_status()
+            if s["running"]:
+                uptime = f"uptime {watch_module.fmt_uptime(s.get('uptime_seconds'))}"
+            else:
+                uptime = f"stopped {watch_module.fmt_uptime(s.get('stopped_since_seconds'))}"
+            pids = ", ".join(str(p) for p in s["pids"]) if s["pids"] else ""
+            line = f"watch: {s['mode']} | {uptime} | {s['notified_count']} notified"
+            if pids:
+                line += f" | PIDs {pids}"
+            print(line)
             return 0
         # The watcher manages its own browser (launch/close per poll) so it
         # doesn't hold the profile lock open.
@@ -321,7 +336,17 @@ def main(argv: list[str] | None = None) -> int:
         from . import watch as watch_module
 
         if args.status:
-            print(json.dumps(watch_module.watchdog_status(), indent=2))
+            from . import watch as watch_module
+            s = watch_module.watchdog_status()
+            if s["running"]:
+                uptime = f"uptime {watch_module.fmt_uptime(s.get('uptime_seconds'))}"
+            else:
+                uptime = f"stopped {watch_module.fmt_uptime(s.get('stopped_since_seconds'))}"
+            pids = ", ".join(str(p) for p in s["pids"]) if s["pids"] else ""
+            line = f"watchdog: {s['mode']} | {uptime} | {s['lock_creations']} on, {s['lock_removals']} off"
+            if pids:
+                line += f" | PIDs {pids}"
+            print(line)
             return 0
 
         if args.background:

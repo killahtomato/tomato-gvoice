@@ -136,13 +136,18 @@ def watch_status() -> dict:
     """Return the status of the watch service."""
     status = _process_status("tgv-watch", ["tgv.cli watch"])
     uptime_seconds = None
+    stopped_since_seconds = None
     notified_count = 0
     try:
         data = json.loads(config.WATCH_STATE.read_text(encoding="utf-8"))
         notified_count = len(data.get("notified_ids", []))
         updated = data.get("updated")
         if updated:
-            uptime_seconds = int(time.time() - updated)
+            elapsed = int(time.time() - updated)
+            if status["running"]:
+                uptime_seconds = elapsed
+            else:
+                stopped_since_seconds = elapsed
     except (OSError, ValueError):
         pass
     return {
@@ -150,6 +155,7 @@ def watch_status() -> dict:
         "mode": status["mode"],
         "pids": status["pids"],
         "uptime_seconds": uptime_seconds,
+        "stopped_since_seconds": stopped_since_seconds,
         "notified_count": notified_count,
     }
 
@@ -169,16 +175,23 @@ def _save_watchdog_stats(stats: dict) -> None:
 def watchdog_status() -> dict:
     """Return the status of the watchdog service."""
     status = _process_status("tgv-watchdog", ["tgv.cli watchdog"])
-    stats = _load_watchdog_stats()
     uptime_seconds = None
+    stopped_since_seconds = None
+    started = None
+    stats = _load_watchdog_stats()
     started = stats.get("started")
     if started:
-        uptime_seconds = int(time.time() - started)
+        elapsed = int(time.time() - started)
+        if status["running"]:
+            uptime_seconds = elapsed
+        else:
+            stopped_since_seconds = elapsed
     return {
         "running": status["running"],
         "mode": status["mode"],
         "pids": status["pids"],
         "uptime_seconds": uptime_seconds,
+        "stopped_since_seconds": stopped_since_seconds,
         "lock_creations": stats.get("lock_creations", 0),
         "lock_removals": stats.get("lock_removals", 0),
     }
