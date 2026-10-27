@@ -155,17 +155,19 @@ class HelpScreen(ModalScreen):
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "[b]Tomato-gVoice — keys[/b]\n\n"
-            "  j / ↓      next thread\n"
-            "  k / ↑      previous thread\n"
-            "  Enter      open thread\n"
-            "  r          refresh\n"
-            "  c          compose new message\n"
-            "  /          search\n"
-            "  g          contacts\n"
-            "  m          mark thread read\n"
-            "  ?          this help\n"
-            "  q          quit\n",
+            "[b]🍅 Tomato-gVoice[/b]\n\n"
+            "  (__)   j / ↓   next thread\n"
+            "  /  \\   k / ↑   previous thread\n"
+            "  \\__/   Enter   open thread\n"
+            " 🍅🍅🍅   r       refresh\n"
+            "          c       compose new message\n"
+            "  ╭────╮  /       search\n"
+            "  │tom│  g       contacts\n"
+            "  ╰────╯  m       mark thread read\n"
+            "  ──────  ?       this help\n"
+            "  ╲    ╱  q       quit\n"
+            "   ╲  ╱\n"
+            "    ╲╱\n",
             id="help",
         )
 
@@ -316,6 +318,23 @@ class ContactsScreen(ModalScreen):
 # App
 # --------------------------------------------------------------------------- #
 class TuiApp(App):
+    """Tomato-gVoice terminal UI."""
+
+    TITLE = "🍅 Tomato-gVoice"
+
+    THEME = {
+        "primary": "#ff6347",
+        "accent": "#dc143c",
+        "background": "#1a1a2e",
+        "surface": "#2d2d44",
+        "surface-dark": "#1e1e30",
+        "text": "#eaeaea",
+        "text-muted": "#a0a0b0",
+        "warning": "#ffd700",
+        "success": "#5a8f3a",
+        "error": "#dc143c",
+    }
+
     CSS = """
     Screen { layout: vertical; }
 
@@ -395,13 +414,28 @@ class TuiApp(App):
     .thread-unread { color: $warning; }
     .thread-read { color: $text-muted; }
 
+    /* Branding */
+    .brand-header {
+        height: 1;
+        text-style: bold;
+        color: $primary;
+        text-align: center;
+        padding: 0 1;
+    }
+
+    .brand-footer {
+        height: 1;
+        color: $text-muted;
+        text-align: center;
+        padding: 0 1;
+    }
+
     #help { padding: 1 2; }
     #search-input { margin: 1; }
     #search-results { height: 1fr; }
     #search-status { padding: 0 1; color: $text-muted; }
     #compose-recipient { margin: 1 1 0 1; }
     #compose-text { margin: 1; }
-    #compose-hint { padding: 0 1; color: $text-muted; }
     #contacts-filter { margin: 1; }
     #contacts-list { height: 1fr; }
     """
@@ -432,13 +466,21 @@ class TuiApp(App):
         self._contacts_cache: dict[str, list[str]] | None = None
 
     def compose(self) -> ComposeResult:
-        yield Header(show_clock=True)
+        yield Static(
+            "🍅  Tomato-gVoice",
+            classes="brand-header",
+            id="brand-header",
+        )
         with Horizontal(id="main"):
             yield ThreadList(id="sidebar")
             with Vertical(id="conversation"):
                 yield MessagePane(id="messages")
                 yield ComposeBar(id="compose")
-        yield Footer()
+        yield Static(
+            "r: refresh  c: compose  /: search  g: contacts  q: quit",
+            classes="brand-footer",
+            id="brand-footer",
+        )
 
     def on_mount(self) -> None:
         self._write_pid()
@@ -725,7 +767,7 @@ class TuiApp(App):
                 continue
             self.call_from_thread(
                 self.notify,
-                f"{msg.get('participant') or 'unknown'}: {msg.get('text') or ''}",
+                f"🍅 {msg.get('participant') or 'unknown'}: {msg.get('text') or ''}",
                 title="New message",
                 severity="information",
             )
