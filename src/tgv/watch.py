@@ -14,6 +14,8 @@ from playwright.sync_api import Error as PlaywrightError
 from . import config, reader, session
 from .text_utils import clean
 
+from typing import Any
+
 _POLL_WINDOW_MS = 5 * 60 * 1000  # look back 5 minutes on every poll
 
 TERMINAL_CANDIDATES = (
@@ -92,9 +94,47 @@ def _is_service_active(service: str) -> bool:
         return False
 
 
+def _find_tgv_pids(pattern: str) -> list[int]:
+    """Return PIDs of processes matching the pattern (daemons)."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-f", pattern],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    pids = []
+    for line in result.stdout.strip().splitlines():
+        if line and "pgrep -f" not in line:
+            try:
+                pids.append(int(line))
+            except ValueError:
+                pass
+    return pids
+
+
+def _process_status(
+    service: str, daemon_patterns: list[str]
+) -> dict[str, Any]:
+    """Detect whether a service runs via systemd or as a daemon.
+
+    Returns {"running": bool, "mode": "systemd"|"daemon"|"none", "pids": list[int]}
+    """
+    # Check systemd first
+    if _is_service_active(service):
+        return {"running": True, "mode": "systemd", "pids": []}
+    # Check for daemon processes
+    pids = []
+    for pattern in daemon_patterns:
+        pids.extend(_find_tgv_pids(pattern))
+    if pids:
+        return {"running": True, "mode": "daemon", "pids": pids}
+    return {"running": False, "mode": "none", "pids": []}
+
+
 def watch_status() -> dict:
     """Return the status of the watch service."""
-    running = _is_service_active("tgv-watch")
+    status = _process_status("tgv-watch", ["tgv.cli watch"])
     uptime_seconds = None
     notified_count = 0
     try:
@@ -106,7 +146,9 @@ def watch_status() -> dict:
     except (OSError, ValueError):
         pass
     return {
-        "running": running,
+        "running": status["running"],
+        "mode": status["mode"],
+        "pids": status["pids"],
         "uptime_seconds": uptime_seconds,
         "notified_count": notified_count,
     }
@@ -126,14 +168,16 @@ def _save_watchdog_stats(stats: dict) -> None:
 
 def watchdog_status() -> dict:
     """Return the status of the watchdog service."""
-    running = _is_service_active("tgv-watchdog")
+    status = _process_status("tgv-watchdog", ["tgv.cli watchdog"])
     stats = _load_watchdog_stats()
     uptime_seconds = None
     started = stats.get("started")
     if started:
         uptime_seconds = int(time.time() - started)
     return {
-        "running": running,
+        "running": status["running"],
+        "mode": status["mode"],
+        "pids": status["pids"],
         "uptime_seconds": uptime_seconds,
         "lock_creations": stats.get("lock_creations", 0),
         "lock_removals": stats.get("lock_removals", 0),
