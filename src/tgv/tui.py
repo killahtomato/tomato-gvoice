@@ -426,6 +426,8 @@ class TuiApp(App):
         self._last_ts: float = 0.0
         self._rebuilding = False
         self._contacts_cache: dict[str, list[str]] | None = None
+        self._thread_payload: Any = None
+        self._thread_participants: list[str | None] = []
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -523,6 +525,10 @@ class TuiApp(App):
         assert self._worker is not None
         try:
             threads = self._worker.call(reader.list_threads, limit=100)
+            # Also capture the full API payload for fast thread loading.
+            payload_tuple = self._worker.call(reader.capture_thread_list)
+            self._thread_payload = payload_tuple[0] if payload_tuple else None
+            self._thread_participants = self._worker.call(reader.dom_participants)
         except Exception as exc:  # noqa: BLE001
             self.call_from_thread(self.notify, str(exc), severity="error")
             return
@@ -588,6 +594,52 @@ class TuiApp(App):
             return
         self.call_from_thread(self._set_messages, thread)
 
+    def load_thread_cached(self, thread_idx: int) -> None:
+        """Load thread messages from cached API payload (near-instant)."""
+        if self._thread_payload is None:
+            self.load_thread(thread_idx)
+            return
+        raw_threads = (
+            self._thread_payload
+            if isinstance(self._thread_payload, list)
+            else []
+        )
+        if not raw_threads or thread_idx >= len(raw_threads):
+            self.load_thread(thread_idx)
+            return
+        raw_thread = raw_threads[thread_idx]
+        raw_messages = (
+            raw_thread[2]
+            if isinstance(raw_thread, list) and len(raw_thread) > 2
+            and isinstance(raw_thread[2], list)
+            else []
+        )
+        participant = (
+            self._thread_participants[thread_idx]
+            if thread_idx < len(self._thread_participants)
+            else None
+        )
+        messages = []
+        for m in raw_messages:
+            if not isinstance(m, list) or len(m) < 10:
+                continue
+            direction = (
+                "incoming"
+                if m[4] == config.DIRECTION_INCOMING
+                else "outgoing"
+                if m[4] == config.DIRECTION_OUTGOING
+                else "unknown"
+            )
+            ts = m[1]
+            text = m[9] if isinstance(m[9], str) else ""
+            messages.append({
+                "direction": direction,
+                "timestamp": str(ts) if ts else None,
+                "text": text,
+                "participant": participant,
+            })
+        self._set_messages({"messages": messages, "participant": participant})
+
     def _set_messages(self, thread: dict) -> None:
         pane = self.query_one("#messages", MessagePane)
         participant = thread.get("participant")
@@ -644,7 +696,7 @@ class TuiApp(App):
             return
         self._selected = event.index
         self._update_compose_recipient()
-        self.load_thread(event.index)
+        self.load_thread_cached(event.index)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "compose-input":
