@@ -520,6 +520,9 @@ class TuiApp(App):
         self.call_from_thread(self._set_threads, threads)
 
     def _set_threads(self, threads: list[dict]) -> None:
+        # Skip rebuild if nothing changed — preserves the highlight.
+        if threads == self._threads:
+            return
         self._threads = threads
         try:
             sidebar = self.query_one("#sidebar", ThreadList)
@@ -527,9 +530,9 @@ class TuiApp(App):
             return
         self._rebuilding = True
         sidebar.clear()
-        self._rebuilding = False
         if not threads:
             sidebar.append(ListItem(Static("No conversations.")))
+            self._rebuilding = False
             return
         # Scale truncation to sidebar width (roughly 32% of terminal).
         sw = sidebar.size.width
@@ -548,10 +551,23 @@ class TuiApp(App):
             self._selected = 0
         if threads:
             idx = min(self._selected, len(threads) - 1)
-            sidebar.index = idx
             self._selected = idx
-            sidebar.focus()
+            sidebar.index = idx
             self.load_thread(idx)
+        self._rebuilding = False
+        # Restore the visual highlight after the widget has refreshed.
+        self.call_after_refresh(lambda: self._restore_selection(idx))
+
+    def _restore_selection(self, idx: int) -> None:
+        if self._rebuilding:
+            return
+        try:
+            sidebar = self.query_one("#sidebar", ThreadList)
+        except NoMatches:
+            return
+        if idx < len(sidebar.children):
+            sidebar.index = idx
+            sidebar.focus()
 
     @work(thread=True)
     def load_thread(self, index: int) -> None:
@@ -570,6 +586,11 @@ class TuiApp(App):
         for msg in messages:
             msg["participant"] = participant
         pane.set_messages(messages)
+        # Re-apply sidebar focus after the message pane rebuild refreshes.
+        self.call_after_refresh(self._restore_message_focus)
+
+    def _restore_message_focus(self) -> None:
+        self.query_one("#sidebar", ThreadList).focus()
 
     # -- events ------------------------------------------------------------ #
     def on_list_view_selected(self, event: ListView.Selected) -> None:
