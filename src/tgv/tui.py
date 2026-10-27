@@ -337,6 +337,10 @@ class TuiApp(App):
     /* Override default selection / highlight colors */
     $selection: #e0553d66;
     $boost: #e0553d33;
+    $block-cursor-background: #e0553d;
+    $block-cursor-blurred-background: #e0553d66;
+    $block-cursor-foreground: #ffffff;
+    $block-hover-background: #e0553d33;
 
     #main { height: 1fr; }
 
@@ -347,11 +351,6 @@ class TuiApp(App):
     }
 
     #sidebar ListView { height: 1fr; }
-
-    #sidebar ListView .--highlighted {
-        background: $selection;
-        color: $text;
-    }
 
     #sidebar ListItem {
         height: auto;
