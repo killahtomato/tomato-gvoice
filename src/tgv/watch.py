@@ -190,15 +190,107 @@ def _is_profile_locked(exc: BaseException) -> bool:
     return "processsingleton" in text or "profile" in text and "lock" in text
 
 
-def _daemonize() -> None:
-    """Double-fork into a background process so the watcher survives terminal close."""
-    if os.fork() > 0:
-        sys.exit(0)
-    os.setsid()
-    if os.fork() > 0:
-        sys.exit(0)
-    sys.stdout = open(os.devnull, "w")
-    sys.stderr = open(os.devnull, "w")
+def _find_tgv_processes(pattern: str) -> list[tuple[int, str]]:
+    """Return (pid, cmdline) for processes matching pattern."""
+    try:
+        result = subprocess.run(
+            ["pgrep", "-af", pattern],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    processes = []
+    for line in result.stdout.strip().splitlines():
+        if not line:
+            continue
+        parts = line.split(None, 1)
+        pid = int(parts[0])
+        cmdline = parts[1] if len(parts) > 1 else ""
+        # Skip our own kill command and the pgrep process itself
+        if "tgv kill" in cmdline or "pgrep -af" in cmdline:
+            continue
+        processes.append((pid, cmdline))
+    return processes
+
+
+def _kill_processes(processes: list[tuple[int, str]], sig: int = 15) -> None:
+    """Send signal to all given processes."""
+    for pid, _ in processes:
+        try:
+            os.kill(pid, sig)
+        except (OSError, ProcessLookupError):
+            pass
+
+
+def kill_all() -> None:
+    """Find and terminate all tgv-related processes.
+
+    Reports status before and after. Sends SIGTERM first, then SIGKILL
+    to anything that survives.
+    """
+    patterns = {
+        "tgv watch": "tgv.cli watch",
+        "tgv watchdog": "tgv.cli watchdog",
+        "tgv tui": "tgv.cli tui",
+        "chromium (main)": f"user-data-dir={config.PROFILE_DIR}",
+        "chromium (tui)": f"user-data-dir={config.TUI_PROFILE_DIR}",
+    }
+
+    # --- BEFORE ---
+    before = {}
+    all_procs = []
+    for label, pattern in patterns.items():
+        procs = _find_tgv_processes(pattern)
+        before[label] = procs
+        all_procs.extend(procs)
+
+    print("BEFORE:")
+    for label, procs in before.items():
+        if procs:
+            pids = ", ".join(str(p) for p, _ in procs)
+            print(f"  {label:15s}: {len(procs)} running (PIDs: {pids})")
+        else:
+            print(f"  {label:15s}: not running")
+
+    if not all_procs:
+        print("\nNo tgv processes found.")
+        return
+
+    # --- KILL (SIGTERM) ---
+    print(f"\nSending SIGTERM to {len(all_procs)} process(es)...")
+    _kill_processes(all_procs, sig=15)
+    time.sleep(2)
+
+    # --- AFTER ---
+    surviving = []
+    for label, pattern in patterns.items():
+        remaining = _find_tgv_processes(pattern)
+        surviving.extend(remaining)
+
+    if surviving:
+        print(f"\n{len(surviving)} process(es) survived SIGTERM. Sending SIGKILL...")
+        _kill_processes(surviving, sig=9)
+        time.sleep(1)
+
+    # --- FINAL STATUS ---
+    print("\nAFTER:")
+    any_alive = False
+    for label, pattern in patterns.items():
+        remaining = _find_tgv_processes(pattern)
+        if remaining:
+            pids = ", ".join(str(p) for p, _ in remaining)
+            print(f"  {label:15s}: {len(remaining)} STILL RUNNING (PIDs: {pids})")
+            any_alive = True
+        else:
+            print(f"  {label:15s}: terminated")
+
+    if any_alive:
+        print(
+            "\nWARNING: Some processes could not be killed. "
+            "Try running with elevated permissions."
+        )
+    else:
+        print("\nAll tgv processes terminated.")
 
 
 def watch(

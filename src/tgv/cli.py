@@ -212,6 +212,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="detach into the background (survives terminal close)",
     )
 
+    sub.add_parser(
+        "kill", help="kill all tgv processes (watch, watchdog, tui, chromium)"
+    )
+
     return parser
 
 
@@ -220,6 +224,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "login":
         return 0 if session.login() else 1
+
+    if args.command == "kill":
+        from . import watch as watch_module
+        watch_module.kill_all()
+        return 0
 
     if args.command == "watch":
         if args.status:
