@@ -12,7 +12,6 @@ import json
 import os
 import queue
 import re
-import signal
 import threading
 import time
 from pathlib import Path
@@ -507,7 +506,6 @@ class TuiApp(App):
 
     def on_mount(self) -> None:
         self._write_pid()
-        self._install_exit_handlers()
         self._start()
 
     def _write_pid(self) -> None:
@@ -519,20 +517,6 @@ class TuiApp(App):
             config.TUI_PID_FILE.unlink()
         except FileNotFoundError:
             pass
-
-    def _install_exit_handlers(self) -> None:
-        atexit.register(self._remove_pid)
-        for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
-            try:
-                signal.signal(sig, self._signal_handler)
-            except (OSError, ValueError):
-                pass
-
-    def _signal_handler(self, signum: int, frame: object) -> None:
-        if signum == signal.SIGHUP:
-            return
-        self._remove_pid()
-        raise SystemExit(0)
 
     @work(thread=True)
     def _start(self) -> None:
