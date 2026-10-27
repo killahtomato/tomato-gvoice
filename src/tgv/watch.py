@@ -234,7 +234,7 @@ def _notify(
             "text": text,
         }))
         return
-    title = f"Google Voice — {sender}"
+    title = f"🍅 Tomato-gVoice — {sender}"
     thread = message.get("thread")
     if not shutil.which("notify-send"):
         print(f"{title}\n  {text}", file=sys.stderr)

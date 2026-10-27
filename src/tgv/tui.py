@@ -791,7 +791,7 @@ class TuiApp(App):
             self.call_from_thread(
                 self.notify,
                 f"🍅 {msg.get('participant') or 'unknown'}: {msg.get('text') or ''}",
-                title="New message",
+                title="🍅 Tomato-gVoice",
                 severity="information",
             )
 
