@@ -451,7 +451,7 @@ class TuiApp(App):
     }
 
     ModalScreen {
-        align: top;
+        align: center top;
     }
     #search-input { margin: 1; }
     #search-results { height: 1fr; }
