@@ -137,10 +137,11 @@ class ThreadList(ListView):
     """The sidebar thread list."""
 
 
-class ComposeBar(Horizontal):
-    """The compose input at the bottom."""
+class ComposeBar(Vertical):
+    """The compose area: recipient info above the input."""
 
     def compose(self) -> ComposeResult:
+        yield Static("Select a conversation", id="compose-recipient", classes="compose-recipient")
         yield Input(placeholder="Type a message…", id="compose-input")
         yield Static("i: type  Esc: list", classes="send-hint")
 
@@ -350,7 +351,13 @@ class TuiApp(App):
         height: 100%;
         border-top: solid $primary;
         padding: 0 1;
-        align: center middle;
+    }
+
+    .compose-recipient {
+        height: 1;
+        padding: 0 0 0 0;
+        color: $text-muted;
+        text-style: dim;
     }
 
     #compose Input { width: 1fr; }
@@ -568,6 +575,7 @@ class TuiApp(App):
         if idx < len(sidebar.children):
             sidebar.index = idx
             sidebar.focus()
+        self._update_compose_recipient()
 
     @work(thread=True)
     def load_thread(self, index: int) -> None:
@@ -592,11 +600,33 @@ class TuiApp(App):
     def _restore_message_focus(self) -> None:
         self.query_one("#sidebar", ThreadList).focus()
 
+    def _update_compose_recipient(self) -> None:
+        """Update the recipient display in the compose bar."""
+        try:
+            static = self.query_one("#compose-recipient", Static)
+        except NoMatches:
+            return
+        if self._selected is None or not self._threads:
+            static.update("Select a conversation")
+            return
+        thread = self._threads[self._selected]
+        name = _clean(thread.get("participant"))
+        number = _clean(thread.get("title"))
+        if name and number:
+            static.update(f"Messaging: {name} ({number})")
+        elif name:
+            static.update(f"Messaging: {name}")
+        elif number:
+            static.update(f"Messaging: {number}")
+        else:
+            static.update("Messaging: unknown")
+
     # -- events ------------------------------------------------------------ #
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if self._rebuilding:
             return
         self._selected = event.index
+        self._update_compose_recipient()
         self.load_thread(event.index)
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
