@@ -327,6 +327,16 @@ class TuiApp(App):
 
     #sidebar ListView { height: 1fr; }
 
+    #sidebar ListItem {
+        height: auto;
+        padding: 0 1;
+        border-bottom: solid $surface;
+    }
+
+    #sidebar ListItem Static {
+        overflow: hidden;
+    }
+
     #conversation { width: 1fr; layout: grid; grid-rows: 67% 33%; grid-gutter: 0; }
 
     #messages {
@@ -520,7 +530,8 @@ class TuiApp(App):
         for thread in threads:
             marker = "●" if thread.get("unread") else " "
             preview = (thread.get("preview") or "").splitlines()[0]
-            label = f"{marker} {_clean(thread.get('participant')) or 'unknown'}\n     {preview}"
+            participant = _clean(thread.get("participant")) or "unknown"
+            label = f"[bold $accent]{marker} {participant}[/]\n[dim $text-muted]     {preview}[/]"
             sidebar.append(ListItem(Static(label)))
         if threads:
             sidebar.index = 0
