@@ -323,16 +323,16 @@ class TuiApp(App):
     TITLE = "🍅 Tomato-gVoice"
 
     CSS = """
-    /* Tomato palette — override before textual defaults */
-    $primary: #ff6347;
-    $accent: #dc143c;
-    $background: #1a1a2e;
-    $surface: #2d2d44;
-    $text: #eaeaea;
-    $text-muted: #a0a0b0;
-    $warning: #ffd700;
-    $success: #5a8f3a;
-    $error: #dc143c;
+    /* Tomato palette — soft, readable tones */
+    $primary: #e0553d;
+    $accent: #b5403a;
+    $background: #14141f;
+    $surface: #252536;
+    $text: #f5f5f5;
+    $text-muted: #9a9aaa;
+    $warning: #e0a800;
+    $success: #4a7a2e;
+    $error: #c43a2e;
 
     #main { height: 1fr; }
 
