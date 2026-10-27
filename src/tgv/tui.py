@@ -610,7 +610,7 @@ class TuiApp(App):
             return
         thread = self._threads[self._selected]
         name = _clean(thread.get("participant"))
-        number = _clean(thread.get("title"))
+        number = self._lookup_number(name)
         if name and number:
             static.update(f"Messaging: {name} ({number})")
         elif name:
@@ -619,6 +619,20 @@ class TuiApp(App):
             static.update(f"Messaging: {number}")
         else:
             static.update("Messaging: unknown")
+
+    def _lookup_number(self, name: str | None) -> str | None:
+        """Look up the phone number for a contact name."""
+        if not name:
+            return None
+        try:
+            contacts_map = self._worker.call(contacts.load)
+        except Exception:
+            return None
+        normalized = contacts.normalize_name(name)
+        for cname, numbers in contacts_map.items():
+            if contacts.normalize_name(cname) == normalized:
+                return numbers[0] if numbers else None
+        return None
 
     # -- events ------------------------------------------------------------ #
     def on_list_view_selected(self, event: ListView.Selected) -> None:
