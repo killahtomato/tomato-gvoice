@@ -337,10 +337,10 @@ class TuiApp(App):
     /* Override default selection / highlight colors */
     $selection: #e0553d66;
     $boost: #e0553d33;
-    $block-cursor-background: #e8a03a;
-    $block-cursor-blurred-background: #e8a03a44;
-    $block-cursor-foreground: #1a1a2e;
-    $block-hover-background: #e8a03a22;
+    $block-cursor-background: #6b1e14;
+    $block-cursor-blurred-background: #6b1e1488;
+    $block-cursor-foreground: #ffffff;
+    $block-hover-background: #6b1e1433;
 
     #main { height: 1fr; }
 
