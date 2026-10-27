@@ -174,10 +174,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="detach into the background (survives terminal close)",
     )
     watch_cmd.add_argument(
-        "--click-cmd",
-        nargs="+",
-        default=None,
-        help="command to run when a notification is clicked (default: open TUI in foot)",
+        "--status", action="store_true",
+        help="show watch service status and exit"
     )
 
     tui_cmd = sub.add_parser("tui", help="open the interactive terminal UI")
@@ -199,9 +197,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--interval", type=float, default=5.0, help="seconds between polls (default: 5)"
     )
     watchdog_cmd.add_argument(
-        "--background",
-        action="store_true",
-        help="detach into the background (survives terminal close)",
+        "--status", action="store_true",
+        help="show watchdog service status and exit"
     )
 
     return parser
@@ -214,6 +211,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if session.login() else 1
 
     if args.command == "watch":
+        if args.status:
+            from . import watch as watch_module
+            print(json.dumps(watch_module.watch_status(), indent=2))
+            return 0
         # The watcher manages its own browser (launch/close per poll) so it
         # doesn't hold the profile lock open.
         try:
@@ -241,6 +242,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "watchdog":
         from . import watch as watch_module
+
+        if args.status:
+            print(json.dumps(watch_module.watchdog_status(), indent=2))
+            return 0
 
         if args.background:
             watch_module._daemonize()

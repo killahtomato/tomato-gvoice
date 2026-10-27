@@ -80,6 +80,66 @@ def _load_state() -> set[str]:
         return set()
 
 
+def _is_service_active(service: str) -> bool:
+    """Check if a systemd user service is active."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "--user", "is-active", service],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
+def watch_status() -> dict:
+    """Return the status of the watch service."""
+    running = _is_service_active("tgv-watch")
+    uptime_seconds = None
+    notified_count = 0
+    try:
+        data = json.loads(config.WATCH_STATE.read_text(encoding="utf-8"))
+        notified_count = len(data.get("notified_ids", []))
+        updated = data.get("updated")
+        if updated:
+            uptime_seconds = int(time.time() - updated)
+    except (OSError, ValueError):
+        pass
+    return {
+        "running": running,
+        "uptime_seconds": uptime_seconds,
+        "notified_count": notified_count,
+    }
+
+
+def _load_watchdog_stats() -> dict:
+    try:
+        return json.loads(config.WATCHDOG_STATS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"lock_creations": 0, "lock_removals": 0, "started": None}
+
+
+def _save_watchdog_stats(stats: dict) -> None:
+    config.WATCHDOG_STATS.parent.mkdir(parents=True, exist_ok=True)
+    config.WATCHDOG_STATS.write_text(json.dumps(stats), encoding="utf-8")
+
+
+def watchdog_status() -> dict:
+    """Return the status of the watchdog service."""
+    running = _is_service_active("tgv-watchdog")
+    stats = _load_watchdog_stats()
+    uptime_seconds = None
+    started = stats.get("started")
+    if started:
+        uptime_seconds = int(time.time() - started)
+    return {
+        "running": running,
+        "uptime_seconds": uptime_seconds,
+        "lock_creations": stats.get("lock_creations", 0),
+        "lock_removals": stats.get("lock_removals", 0),
+    }
+
+
 def _save_state(notified: set[str]) -> None:
     # Keep the set bounded so the file doesn't grow forever.
     recent = sorted(notified)[-1000:]
@@ -277,12 +337,20 @@ def watchdog(*, interval: float = 5.0) -> None:
     - TUI dead, lock      → remove lock + kill Chromium ghosts (resume main watch)
     - TUI dead, no lock   → no-op
     """
+    stats = _load_watchdog_stats()
+    if stats.get("started") is None:
+        stats["started"] = time.time()
+        _save_watchdog_stats(stats)
     while True:
         pid_alive = _tui_pid_alive()
         lock_exists = config.TUI_LOCK_FILE.exists()
         if pid_alive and not lock_exists:
             config.TUI_LOCK_FILE.write_text(str(os.getpid()))
+            stats["lock_creations"] += 1
+            _save_watchdog_stats(stats)
         elif not pid_alive and lock_exists:
             config.TUI_LOCK_FILE.unlink()
             _clean_tui_ghosts()
+            stats["lock_removals"] += 1
+            _save_watchdog_stats(stats)
         time.sleep(interval)

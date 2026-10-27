@@ -31,6 +31,9 @@ LAUNCHER = Path(__file__).resolve().parent.parent.parent / "tgv"
 # Wrapper script that opens the TUI, stopping the watch service first.
 OPEN_TUI = Path(os.environ.get("TGV_OPEN_TUI", Path.home() / ".local/bin/tgv-open-tui"))
 
+# Stats file for the watchdog's lock transition counters.
+WATCHDOG_STATS = BASE_DIR / "watchdog_stats.json"
+
 # How long the cached contact map is trusted before it is refetched.
 CONTACTS_CACHE_TTL_SECONDS = 24 * 60 * 60
 
