@@ -77,9 +77,9 @@ tgv send recipient "hello" --refresh   # re-fetch contacts first
 ### Search & contacts
 
 ```bash
-tgv search "sushi"                    # search all messages
+tgv search "pizza"                    # search all messages
 tgv search tacos --thread recipient   # ...within one conversation
-tgv search tacos -n 20                # limit to 20 results
+tgv search sushi -n 20                # limit to 20 results
 tgv contacts                          # list known contacts
 tgv contacts Contact                  # search contacts
 tgv contacts --refresh                # re-fetch contacts
