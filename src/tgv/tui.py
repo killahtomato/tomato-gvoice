@@ -542,6 +542,7 @@ class TuiApp(App):
         self._interval = interval
         self._threads: list[dict] = []
         self._selected: int | None = None
+        self._selected_id: str | None = None
         self._last_ts: float = 0.0
         self._rebuilding = False
         self._contacts_cache: dict[str, list[str]] | None = None
@@ -645,6 +646,13 @@ class TuiApp(App):
             return
         self.call_from_thread(self._set_threads, threads)
 
+    def _find_thread_index(self, participant: str, threads: list[dict]) -> int | None:
+        """Find the index of a thread by participant name/number."""
+        for i, thread in enumerate(threads):
+            if clean(thread.get("participant")) == participant:
+                return i
+        return None
+
     def _set_threads(self, threads: list[dict]) -> None:
         # Skip rebuild if nothing changed — preserves the highlight.
         if threads == self._threads:
@@ -676,7 +684,14 @@ class TuiApp(App):
         if threads and self._selected is None:
             self._selected = 0
         if threads:
-            idx = min(self._selected, len(threads) - 1)
+            # Find the new index of the previously selected conversation.
+            # Track by participant so reordering doesn't switch the selection.
+            idx = self._selected
+            if self._selected_id is not None:
+                found = self._find_thread_index(self._selected_id, threads)
+                if found is not None:
+                    idx = found
+            idx = max(0, min(idx, len(threads) - 1))
             self._selected = idx
             sidebar.index = idx
             self.load_thread(idx)
@@ -760,6 +775,8 @@ class TuiApp(App):
         if self._rebuilding:
             return
         self._selected = event.index
+        thread = self._threads[event.index] if event.index < len(self._threads) else {}
+        self._selected_id = clean(thread.get("participant")) or None
         self._update_compose_recipient()
         self.load_thread(event.index)
 
