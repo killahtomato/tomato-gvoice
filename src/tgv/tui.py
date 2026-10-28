@@ -152,9 +152,8 @@ class MessageRow(Horizontal):
         who = self.message.get("participant") or "unknown"
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
-        # Wrap URLs in Rich link markup so they become clickable.
-        # Escape the URL first to prevent Rich markup errors from special chars.
-        text = self._URL_RE.sub(lambda m: f"[link=\"{escape_markup(m.group(0))}\"]{escape_markup(m.group(0))}[/link]", text)
+        # Highlight URLs with direct Rich styling (color + underline).
+        text = self._URL_RE.sub(lambda m: f"[#e0553d underline]{escape_markup(m.group(0))}[/]", text)
         content = f"{text}\n[dim]{ts}[/]" if not incoming else f"{who}\n{text}\n[dim]{ts}[/]"
         bubble = Static(content, classes="bubble")
         spacer = Static("", classes="spacer")
@@ -174,10 +173,6 @@ class MessageRow(Horizontal):
             if url.startswith("www."):
                 url = "https://" + url
             subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            yield spacer
-        else:
-            yield spacer
-            yield bubble
 
 
 class MessagePane(VerticalScroll):
@@ -489,6 +484,10 @@ class TuiApp(App):
         border-right: thick $accent;
     }
 
+    .bubble:hover {
+        text-style: bold;
+    }
+
     .thread-unread { color: $warning; }
     .thread-read { color: $text-muted; }
 
@@ -510,6 +509,12 @@ class TuiApp(App):
     #compose-text { margin: 1; }
     #contacts-filter { margin: 1; }
     #contacts-list { height: 1fr; }
+
+    /* Link styling for clickable URLs in messages */
+    $link-color: #e0553d;
+    $link-style: underline;
+    $link-color-hover: #ff6b52;
+    $link-style-hover: bold underline;
     """
 
     BINDINGS = [
