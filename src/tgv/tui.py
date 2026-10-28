@@ -161,7 +161,7 @@ class MessageRow(Horizontal):
                 parts.append(escape_markup(text[last:match.start()]))
             url = match.group(0)
             target = url if not url.startswith("www.") else "https://" + url
-            parts.append(f'[@click=app.action_open_url(\'{target}\')]{escape_markup(url)}[/]')
+            parts.append(f'[@click=app.open_url(\'{target}\') ]{escape_markup(url)}[/]')
             last = match.end()
         if last < len(text):
             parts.append(escape_markup(text[last:]))
