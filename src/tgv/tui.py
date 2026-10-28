@@ -147,34 +147,49 @@ class MessageRow(Horizontal):
         super().__init__(classes=f"row {message.get('direction', 'incoming')}")
         self.message = message
 
+    def _open_url(self, url: str) -> None:
+        """Open a URL in the default browser."""
+        target = url if not url.startswith("www.") else "https://" + url
+        subprocess.Popen(
+            ["xdg-open", target],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
     def compose(self) -> ComposeResult:
         incoming = self.message.get("direction") != "outgoing"
         who = self.message.get("participant") or "unknown"
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
 
-        # Build content with Rich [link=url] markup for each URL. The terminal
-        # emulator renders these as clickable, individually highlighted links.
-        parts: list[str] = []
+        # Build display text with Rich color+underline markup for URLs.
+        # Track URL character positions in the rendered (plain) text so we
+        # can map click coordinates to specific URLs.
+        url_spans: list[tuple[int, int, str]] = []  # (char_start, char_end, url)
         last = 0
+        parts: list[str] = []
         for match in self._URL_RE.finditer(text):
             if match.start() > last:
                 parts.append(escape_markup(text[last:match.start()]))
             url = match.group(0)
-            parts.append(f'[link="{escape_markup(url)}"]{escape_markup(url)}[/link]')
+            url_start = sum(len(p) for p in parts)
+            parts.append(f"[#e0553d underline]{escape_markup(url)}[/]")
+            url_spans.append((url_start, url_start + len(url), url))
             last = match.end()
         if last < len(text):
             parts.append(escape_markup(text[last:]))
-        if not parts:
+        if not url_spans:
             parts = [escape_markup(text)]
 
-        content = "".join(parts)
+        display_text = "".join(parts)
+
         if incoming:
-            content = f"{who}\n{content}\n[dim]{ts}[/]"
+            content = f"[bold]{escape_markup(who)}[/]\n{display_text}\n[dim]{escape_markup(ts)}[/]"
         else:
-            content = f"{who}\n{content}\n[dim]{ts}[/]"
+            content = f"{display_text}\n[dim]{escape_markup(ts)}[/]"
 
         bubble = Static(content, classes="bubble")
+        bubble._url_spans = url_spans  # type: ignore[attr-defined]
         spacer = Static("", classes="spacer")
         if incoming:
             yield bubble
@@ -182,6 +197,27 @@ class MessageRow(Horizontal):
         else:
             yield spacer
             yield bubble
+
+    def on_click(self, event: Click) -> None:
+        """Open the URL at the click position."""
+        text = self.message.get("text") or ""
+        url_spans = getattr(self, "_url_spans", [])
+        if not url_spans:
+            return
+
+        # event.x is the column offset, event.y is the row offset (0-indexed).
+        # For incoming: line 0 = sender name, line 1 = message text.
+        # For outgoing: line 0 = message text only.
+        line_offset = 1 if self.message.get("direction") != "outgoing" else 0
+
+        if event.y != line_offset:
+            return
+
+        char_idx = event.x
+        for start, end, url in url_spans:
+            if start <= char_idx < end:
+                self._open_url(url)
+                return
 
 
 class MessagePane(VerticalScroll):
@@ -493,9 +529,7 @@ class TuiApp(App):
         border-right: thick $accent;
     }
 
-    .bubble:hover {
-        text-style: bold;
-    }
+    /* Bold on hover for the entire bubble */
 
     .thread-unread { color: $warning; }
     .thread-read { color: $text-muted; }
