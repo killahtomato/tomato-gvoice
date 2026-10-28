@@ -10,9 +10,12 @@ A terminal CLI for Google Voice SMS. Send and read text messages from your shell
 - **Read** conversations by index or name
 - **List** recent messages in a time window
 - **Search** messages by text
-- **Contact name resolution** — `tgv send Ricki "..."` instead of typing a number
+- **Contact name resolution** — `tgv send recipient "..."` instead of typing a number
 - **Watch** — desktop notifications when new messages arrive
 - **TUI** — interactive full-screen terminal interface (`tgv tui`)
+- **Clickable links** — URLs in messages are colored, underlined, and open in your browser on click
+- **Watchdog** — background service that manages notifications while the TUI is closed
+- **Kill** — clean up all tgv processes
 - **JSON output** on every command for scripting
 
 ## Requirements
@@ -36,40 +39,77 @@ Then make the `tgv` command available:
 ln -sf "$PWD/tgv" ~/.local/bin/tgv
 ```
 
-## Usage
+## Quick start
 
 ```bash
-tgv login                    # one-time interactive sign-in for the CLI (opens a browser window)
-tgv tui-login                # one-time interactive sign-in for the TUI (separate browser profile)
+tgv login                    # one-time interactive sign-in for the CLI
+tgv tui-login                # one-time sign-in for the TUI (separate browser profile)
 tgv status                   # check the saved session
+tgv tui                      # open the interactive terminal UI
+```
+
+## Commands
+
+### Listing & reading
+
+```bash
 tgv threads                  # list conversation previews
+tgv threads -n 20            # limit to 20 threads
+tgv threads --json           # machine-readable output
 tgv read 3                   # read a thread by index
-tgv read "Nanny T"           # ...or by name
+tgv read "Contact Name"      # ...or by name
+tgv read 5 -n 50             # limit to 50 messages
 tgv recent 24h               # messages in the last 24 hours
 tgv recent 7d --incoming     # only incoming messages
-tgv send "(717) 429-6075" "hello"
-tgv send Ricki "hello"       # send to a contact by name
-tgv send Ricki "hello" --dry-run   # preview resolution without sending
-tgv contacts                 # list known contacts
-tgv contacts Rick            # search contacts
-tgv search test              # search messages containing "test"
-tgv search test --thread Ricki   # ...within one conversation
-tgv watch                    # notify about new messages until Ctrl+C
-tgv watch --interval 10      # check every 10 seconds
-tgv tui                      # open the interactive terminal UI
+tgv recent 30m -n 10         # limit to 10 messages
+```
+
+### Sending
+
+```bash
+tgv send "(555) 555-5555" "hello"
+tgv send recipient "hello"   # send to a contact by name
+tgv send recipient "are we still on for tonight?"
+tgv send recipient "hello" --dry-run   # preview without sending
+tgv send recipient "hello" --refresh   # re-fetch contacts first
+```
+
+### Search & contacts
+
+```bash
+tgv search "pizza"                    # search all messages
+tgv search test --thread recipient    # ...within one conversation
+tgv search test -n 20                 # limit to 20 results
+tgv contacts                          # list known contacts
+tgv contacts Contact                  # search contacts
+tgv contacts --refresh                # re-fetch contacts
+```
+
+### Notifications
+
+```bash
+tgv watch                # notify every 30s until Ctrl+C
+tgv watch --interval 10  # check every 10s
+tgv watch --once         # single check (for cron)
+tgv watch --background   # detach into the background
+tgv watch --status       # show watch service status
+tgv watch --json         # print notifications as JSON
 ```
 
 ### Interactive TUI
 
-`tgv tui` opens a full-screen terminal interface:
-
 ```bash
-tgv tui              # interactive mode (headless browser)
-tgv tui --headed     # show the browser window
+tgv tui                  # open the interactive terminal UI
+tgv tui --headed         # show the browser window
+tgv tui --interval 15    # poll every 15 seconds
 ```
 
 Layout: sidebar (conversations) on the left, messages on the right, a compose
 box at the bottom. Outgoing messages align right, incoming align left.
+
+**Clickable links:** URLs in message bubbles are automatically highlighted
+(colored and underlined). Hovering over a link highlights it, and clicking it
+opens the URL in your default browser.
 
 Keys:
 
@@ -89,67 +129,45 @@ Keys:
 
 New messages trigger pop-up alerts while the TUI is running.
 
-### Sending to a contact by name
-
-Add `--json` to any command for machine-readable output:
+### Cleanup
 
 ```bash
-tgv recent 30m --json
+tgv kill                 # kill all tgv processes (watch, watchdog, TUI, chromium)
 ```
 
-### Sending to a contact by name
+## Sending to a contact by name
 
 `send` accepts a name as well as a phone number:
 
 ```bash
-tgv send Ricki "are we still on for tonight?"
+tgv send recipient "are we still on for tonight?"
 ```
 
 Names are matched exactly first, then by prefix, then by substring. If a name
 matches several contacts, `tgv` lists them instead of guessing:
 
 ```
-$ tgv send Dad "hi"
-error: Multiple contacts match 'Dad': +17178775829, +17174337260
+$ tgv send "Contact Name" "hi"
+error: Multiple contacts match 'Contact Name': +1 (555) 555-5555, +1 (555) 555-5556
 ```
 
 Known contacts come from your existing conversations plus your Google contact
 list, cached in `~/.config/tomato-gvoice/contacts.json`. Use `--refresh` to
 re-fetch.
 
-### Searching
+## Background services
 
-`search` does a case-insensitive substring match across the loaded threads:
+Two systemd user services coordinate to keep notifications running:
 
-```bash
-tgv search "pizza"
-tgv search test --thread Ricki
-tgv search test --json
-```
+### `tgv-watch`
 
-### Watching for new messages
-
-`watch` polls your inbox and sends a desktop notification for each new message. When the TUI is **not** running, it keeps you notified in the background.
-
-```bash
-tgv tui                  # open the interactive UI (stops the watcher while it runs)
-tgv watch                # notify every 30s until Ctrl+C
-tgv watch --interval 10  # check every 10s
-tgv watch --once         # single check (for cron)
-tgv watch --json         # print notifications instead of a popup
-```
-
-When the TUI exits, it automatically starts the `tgv-watch` service so notifications resume. Clicking a notification reopens the TUI.
-
-#### Running it in the background
-
-To have notifications running all the time (even when the TUI is closed), install the systemd user service:
+Polls your inbox and sends a desktop notification for each new message. When the TUI is **not** running, it keeps you notified in the background.
 
 ```bash
 systemctl --user enable --now tgv-watch
 ```
 
-This starts on login and restarts on failure. When you open `tgv tui`, the service is automatically stopped (so the TUI can use the browser); when you quit the TUI, the service restarts. Manage it with:
+This starts on login and restarts on failure. When you open `tgv tui`, the service is automatically stopped (so the TUI can use the browser); when you quit the TUI, the service restarts.
 
 ```bash
 systemctl --user status tgv-watch
@@ -157,32 +175,20 @@ systemctl --user stop tgv-watch
 journalctl --user -u tgv-watch -f
 ```
 
-The service lives at `~/.config/systemd/user/tgv-watch.service`.
+### `tgv-watchdog`
 
-### Options
+Manages the lock file that coordinates between the TUI and the watch service. Runs as a separate service that pauses the watcher while the TUI is open.
 
-| Option | Description |
-|---|---|
-| `--headed` | Run the browser in a visible window instead of headless |
-| `--json` | Machine-readable output |
-| `--dry-run` | (send) Resolve the recipient and show where it would go without sending |
-| `--refresh` | (send/contacts) Re-fetch contacts instead of using the cache |
-| `--thread` | (search) Limit results to a contact/thread name |
-| `--interval` | (watch) Seconds between checks (default 30) |
-| `--once` | (watch) Check once and exit |
-| `--click-cmd` | (watch) Command to run when a notification is clicked |
-| `--terminal` | (watch) Terminal to open clicked notifications in |
+```bash
+systemctl --user enable --now tgv-watchdog
+```
 
-### Environment variables
+```bash
+systemctl --user status tgv-watchdog
+journalctl --user -u tgv-watchdog -f
+```
 
-| Variable | Default | Description |
-|---|---|---|
-| `TGV_HOME` | `~/.config/tomato-gvoice` | Config directory |
-| `TGV_PROFILE_DIR` | `$TGV_HOME/chrome` | Browser profile (your login) |
-| `TGV_CONTACTS_CACHE` | `$TGV_HOME/contacts.json` | Cached contact map |
-| `TGV_WATCH_STATE` | `$TGV_HOME/watch_state.json` | Last-seen message timestamp |
-| `TGV_CHROME` | auto-detected | Chromium executable to use |
-| `TGV_DEBUG` | unset | Print step-by-step send logs |
+When the TUI exits, it automatically starts the `tgv-watch` service so notifications resume. Clicking a notification reopens the TUI.
 
 ## How it works
 
