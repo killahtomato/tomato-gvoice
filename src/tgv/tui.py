@@ -29,6 +29,7 @@ from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 from . import config, contacts, reader, sender, session
 from .session import AuthenticationRequiredError, VoiceError
 from .text_utils import clean
+from rich.markup import escape as escape_markup
 
 
 
@@ -152,7 +153,8 @@ class MessageRow(Horizontal):
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
         # Wrap URLs in Rich link markup so they become clickable.
-        text = self._URL_RE.sub(r"[link=\g<0>]\g<0>[/link]", text)
+        # Escape the URL first to prevent Rich markup errors from special chars.
+        text = self._URL_RE.sub(lambda m: f"[link=\"{escape_markup(m.group(0))}\"]{escape_markup(m.group(0))}[/link]", text)
         content = f"{text}\n[dim]{ts}[/]" if not incoming else f"{who}\n{text}\n[dim]{ts}[/]"
         bubble = Static(content, classes="bubble")
         spacer = Static("", classes="spacer")
