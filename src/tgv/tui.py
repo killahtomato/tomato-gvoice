@@ -882,9 +882,6 @@ class TuiApp(App):
 
     def action_open_url(self, url: str) -> None:
         """Open a URL in the default browser. Called from inline [@click] links."""
-        import sys
-
-        print(f"CLICKED URL: {url}", file=sys.stderr, flush=True)
         subprocess.Popen(
             ["xdg-open", url],
             stdout=subprocess.DEVNULL,
