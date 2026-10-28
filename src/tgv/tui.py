@@ -136,6 +136,32 @@ class BrowserWorker:
 # --------------------------------------------------------------------------- #
 # Widgets
 # --------------------------------------------------------------------------- #
+class ClickableStatic(Static):
+    """A Static widget that can receive click events."""
+
+    def __init__(self, content: str, url_spans: list[tuple[int, int, str]], incoming: bool, **kwargs):
+        super().__init__(content, **kwargs)
+        self._url_spans = url_spans
+        self._incoming = incoming
+
+    def on_click(self, event: Click) -> None:
+        if not self._url_spans:
+            return
+        line_offset = 1 if self._incoming else 0
+        if event.y != line_offset:
+            return
+        char_idx = event.x
+        for start, end, url in self._url_spans:
+            if start <= char_idx < end:
+                target = url if not url.startswith("www.") else "https://" + url
+                subprocess.Popen(
+                    ["xdg-open", target],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return
+
+
 class MessageRow(Horizontal):
     """A single message bubble: incoming left, outgoing right."""
 
@@ -188,8 +214,7 @@ class MessageRow(Horizontal):
         else:
             content = f"{display_text}\n[dim]{escape_markup(ts)}[/]"
 
-        bubble = Static(content, classes="bubble")
-        bubble._url_spans = url_spans  # type: ignore[attr-defined]
+        bubble = ClickableStatic(content, url_spans, incoming, classes="bubble")
         spacer = Static("", classes="spacer")
         if incoming:
             yield bubble
@@ -197,27 +222,6 @@ class MessageRow(Horizontal):
         else:
             yield spacer
             yield bubble
-
-    def on_click(self, event: Click) -> None:
-        """Open the URL at the click position."""
-        text = self.message.get("text") or ""
-        url_spans = getattr(self, "_url_spans", [])
-        if not url_spans:
-            return
-
-        # event.x is the column offset, event.y is the row offset (0-indexed).
-        # For incoming: line 0 = sender name, line 1 = message text.
-        # For outgoing: line 0 = message text only.
-        line_offset = 1 if self.message.get("direction") != "outgoing" else 0
-
-        if event.y != line_offset:
-            return
-
-        char_idx = event.x
-        for start, end, url in url_spans:
-            if start <= char_idx < end:
-                self._open_url(url)
-                return
 
 
 class MessagePane(VerticalScroll):
@@ -529,7 +533,9 @@ class TuiApp(App):
         border-right: thick $accent;
     }
 
-    /* Bold on hover for the entire bubble */
+    .bubble:hover {
+        background: $surface;
+    }
 
     .thread-unread { color: $warning; }
     .thread-read { color: $text-muted; }
