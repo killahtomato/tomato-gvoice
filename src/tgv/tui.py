@@ -152,9 +152,28 @@ class MessageRow(Horizontal):
         who = self.message.get("participant") or "unknown"
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
-        # Highlight URLs with direct Rich styling (color + underline).
-        text = self._URL_RE.sub(lambda m: f"[#e0553d underline]{escape_markup(m.group(0))}[/]", text)
-        content = f"{text}\n[dim]{ts}[/]" if not incoming else f"{who}\n{text}\n[dim]{ts}[/]"
+
+        # Build content with Rich [link=url] markup for each URL. The terminal
+        # emulator renders these as clickable, individually highlighted links.
+        parts: list[str] = []
+        last = 0
+        for match in self._URL_RE.finditer(text):
+            if match.start() > last:
+                parts.append(escape_markup(text[last:match.start()]))
+            url = match.group(0)
+            parts.append(f'[link="{escape_markup(url)}"]{escape_markup(url)}[/link]')
+            last = match.end()
+        if last < len(text):
+            parts.append(escape_markup(text[last:]))
+        if not parts:
+            parts = [escape_markup(text)]
+
+        content = "".join(parts)
+        if incoming:
+            content = f"{who}\n{content}\n[dim]{ts}[/]"
+        else:
+            content = f"{who}\n{content}\n[dim]{ts}[/]"
+
         bubble = Static(content, classes="bubble")
         spacer = Static("", classes="spacer")
         if incoming:
@@ -163,16 +182,6 @@ class MessageRow(Horizontal):
         else:
             yield spacer
             yield bubble
-
-    def on_click(self, event: Click) -> None:
-        """Open the first URL found in the message."""
-        text = self.message.get("text") or ""
-        match = self._URL_RE.search(text)
-        if match:
-            url = match.group(0)
-            if url.startswith("www."):
-                url = "https://" + url
-            subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 class MessagePane(VerticalScroll):
