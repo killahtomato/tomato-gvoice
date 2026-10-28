@@ -12,6 +12,7 @@ import json
 import os
 import queue
 import re
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -20,9 +21,10 @@ from typing import Any, Callable
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.events import Click
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import Footer, Header, Input, Link, ListItem, ListView, Static
+from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 
 from . import config, contacts, reader, sender, session
 from .session import AuthenticationRequiredError, VoiceError
@@ -134,11 +136,30 @@ class BrowserWorker:
 # --------------------------------------------------------------------------- #
 # Widgets
 # --------------------------------------------------------------------------- #
-class InlineLink(Link):
-    """A non-focusable link widget for inline use in message bubbles."""
+class ClickableStatic(Static):
+    """A Static widget that can receive click events."""
 
-    focusable = False
-    can_focus = False
+    def __init__(self, content: str, url_spans: list[tuple[int, int, str]], incoming: bool, **kwargs):
+        super().__init__(content, **kwargs)
+        self._url_spans = url_spans
+        self._incoming = incoming
+
+    def on_click(self, event: Click) -> None:
+        if not self._url_spans:
+            return
+        line_offset = 1 if self._incoming else 0
+        if event.y != line_offset:
+            return
+        char_idx = event.x
+        for start, end, url in self._url_spans:
+            if start <= char_idx < end:
+                target = url if not url.startswith("www.") else "https://" + url
+                subprocess.Popen(
+                    ["xdg-open", target],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                return
 
 
 class MessageRow(Horizontal):
@@ -152,53 +173,55 @@ class MessageRow(Horizontal):
         super().__init__(classes=f"row {message.get('direction', 'incoming')}")
         self.message = message
 
+    def _open_url(self, url: str) -> None:
+        """Open a URL in the default browser."""
+        target = url if not url.startswith("www.") else "https://" + url
+        subprocess.Popen(
+            ["xdg-open", target],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
     def compose(self) -> ComposeResult:
         incoming = self.message.get("direction") != "outgoing"
         who = self.message.get("participant") or "unknown"
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
 
-        # Parse message text into segments: (text, url_or_none)
-        segments: list[tuple[str, str | None]] = []
+        # Build display text with Rich color+underline markup for URLs.
+        # Track URL character positions in the rendered (plain) text so we
+        # can map click coordinates to specific URLs.
+        url_spans: list[tuple[int, int, str]] = []  # (char_start, char_end, url)
         last = 0
+        parts: list[str] = []
         for match in self._URL_RE.finditer(text):
             if match.start() > last:
-                segments.append((text[last:match.start()], None))
-            segments.append((match.group(0), match.group(0)))
+                parts.append(escape_markup(text[last:match.start()]))
+            url = match.group(0)
+            url_start = sum(len(p) for p in parts)
+            parts.append(f"[#e0553d underline]{escape_markup(url)}[/]")
+            url_spans.append((url_start, url_start + len(url), url))
             last = match.end()
         if last < len(text):
-            segments.append((text[last:], None))
-        if not segments:
-            segments = [(text, None)]
+            parts.append(escape_markup(text[last:]))
+        if not url_spans:
+            parts = [escape_markup(text)]
 
-        # Build bubble content as a Vertical container
-        bubble_children: list[Static | Horizontal] = []
+        display_text = "".join(parts)
 
         if incoming:
-            bubble_children.append(Static(escape_markup(who), classes="msg-sender"))
+            content = f"[bold]{escape_markup(who)}[/]\n{display_text}\n[dim]{escape_markup(ts)}[/]"
+        else:
+            content = f"{display_text}\n[dim]{escape_markup(ts)}[/]"
 
-        # Build message body as Horizontal with per-segment widgets
-        body_widgets: list[Static | InlineLink] = []
-        for seg_text, url in segments:
-            if not seg_text:
-                continue
-            if url:
-                target = url if not url.startswith("www.") else "https://" + url
-                body_widgets.append(InlineLink(escape_markup(seg_text), url=target))
-            else:
-                body_widgets.append(Static(seg_text))
-
-        bubble_children.append(Horizontal(*body_widgets, classes="msg-body"))
-
-        bubble_children.append(Static(escape_markup(ts), classes="msg-timestamp"))
-
+        bubble = ClickableStatic(content, url_spans, incoming, classes="bubble")
         spacer = Static("", classes="spacer")
         if incoming:
-            yield Vertical(*bubble_children, classes="bubble")
+            yield bubble
             yield spacer
         else:
             yield spacer
-            yield Vertical(*bubble_children, classes="bubble")
+            yield bubble
 
 
 class MessagePane(VerticalScroll):
@@ -510,24 +533,8 @@ class TuiApp(App):
         border-right: thick $accent;
     }
 
-    /* Inline link styling for clickable URLs in message bubbles */
-    InlineLink {
-        color: #e0553d;
-        text-style: underline;
-    }
-
-    InlineLink:hover {
-        color: #ff6b52;
-        text-style: bold underline;
-    }
-
-    .msg-timestamp {
-        color: $text-muted;
-        text-style: dim;
-    }
-
-    .msg-sender {
-        text-style: bold;
+    .bubble:hover {
+        background: $surface;
     }
 
     .thread-unread { color: $warning; }
@@ -552,6 +559,11 @@ class TuiApp(App):
     #contacts-filter { margin: 1; }
     #contacts-list { height: 1fr; }
 
+    /* Link styling for clickable URLs in messages */
+    $link-color: #e0553d;
+    $link-style: underline;
+    $link-color-hover: #ff6b52;
+    $link-style-hover: bold underline;
     """
 
     BINDINGS = [
