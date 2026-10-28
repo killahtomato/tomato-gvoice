@@ -161,9 +161,7 @@ class MessageRow(Horizontal):
                 parts.append(escape_markup(text[last:match.start()]))
             url = match.group(0)
             target = url if not url.startswith("www.") else "https://" + url
-            # Use double quotes around the expression to avoid conflicts with
-            # single quotes that may appear in URLs.
-            parts.append(f'[@click="app.action_open_url(\'{target}\') "]{escape_markup(url)}[/]')
+            parts.append(f'[@click=app.action_open_url(\'{target}\')]{escape_markup(url)}[/]')
             last = match.end()
         if last < len(text):
             parts.append(escape_markup(text[last:]))
@@ -884,6 +882,9 @@ class TuiApp(App):
 
     def action_open_url(self, url: str) -> None:
         """Open a URL in the default browser. Called from inline [@click] links."""
+        import sys
+
+        print(f"CLICKED URL: {url}", file=sys.stderr, flush=True)
         subprocess.Popen(
             ["xdg-open", url],
             stdout=subprocess.DEVNULL,
