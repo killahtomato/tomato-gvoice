@@ -21,7 +21,6 @@ from typing import Any, Callable
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.events import Click
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
@@ -136,32 +135,6 @@ class BrowserWorker:
 # --------------------------------------------------------------------------- #
 # Widgets
 # --------------------------------------------------------------------------- #
-class ClickableStatic(Static):
-    """A Static widget that can receive click events."""
-
-    def __init__(self, content: str, url_spans: list[tuple[int, int, str]], incoming: bool, **kwargs):
-        super().__init__(content, **kwargs)
-        self._url_spans = url_spans
-        self._incoming = incoming
-
-    def on_click(self, event: Click) -> None:
-        if not self._url_spans:
-            return
-        line_offset = 1 if self._incoming else 0
-        if event.y != line_offset:
-            return
-        char_idx = event.x
-        for start, end, url in self._url_spans:
-            if start <= char_idx < end:
-                target = url if not url.startswith("www.") else "https://" + url
-                subprocess.Popen(
-                    ["xdg-open", target],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-                return
-
-
 class MessageRow(Horizontal):
     """A single message bubble: incoming left, outgoing right."""
 
@@ -173,48 +146,38 @@ class MessageRow(Horizontal):
         super().__init__(classes=f"row {message.get('direction', 'incoming')}")
         self.message = message
 
-    def _open_url(self, url: str) -> None:
-        """Open a URL in the default browser."""
-        target = url if not url.startswith("www.") else "https://" + url
-        subprocess.Popen(
-            ["xdg-open", target],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
     def compose(self) -> ComposeResult:
         incoming = self.message.get("direction") != "outgoing"
         who = self.message.get("participant") or "unknown"
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
 
-        # Build display text with Rich color+underline markup for URLs.
-        # Track URL character positions in the rendered (plain) text so we
-        # can map click coordinates to specific URLs.
-        url_spans: list[tuple[int, int, str]] = []  # (char_start, char_end, url)
-        last = 0
+        # Build content with Textual inline [@click] action links for URLs.
+        # Each link opens its own URL via app.action_open_url().
         parts: list[str] = []
+        last = 0
         for match in self._URL_RE.finditer(text):
             if match.start() > last:
                 parts.append(escape_markup(text[last:match.start()]))
             url = match.group(0)
-            url_start = sum(len(p) for p in parts)
-            parts.append(f"[#e0553d underline]{escape_markup(url)}[/]")
-            url_spans.append((url_start, url_start + len(url), url))
+            target = url if not url.startswith("www.") else "https://" + url
+            # Use double quotes around the expression to avoid conflicts with
+            # single quotes that may appear in URLs.
+            parts.append(f'[@click="app.action_open_url(\'{target}\') "]{escape_markup(url)}[/]')
             last = match.end()
         if last < len(text):
             parts.append(escape_markup(text[last:]))
-        if not url_spans:
+        if not parts:
             parts = [escape_markup(text)]
 
         display_text = "".join(parts)
 
         if incoming:
-            content = f"[bold]{escape_markup(who)}[/]\n{display_text}\n[dim]{escape_markup(ts)}[/]"
+            content = f"{escape_markup(who)}\n{display_text}\n[dim]{escape_markup(ts)}[/]"
         else:
             content = f"{display_text}\n[dim]{escape_markup(ts)}[/]"
 
-        bubble = ClickableStatic(content, url_spans, incoming, classes="bubble")
+        bubble = Static(content, classes="bubble")
         spacer = Static("", classes="spacer")
         if incoming:
             yield bubble
@@ -520,6 +483,10 @@ class TuiApp(App):
         height: auto;
         padding: 0 1;
         margin-bottom: 1;
+        link-color: #e0553d;
+        link-style: underline;
+        link-color-hover: #ff6b52;
+        link-style-hover: bold underline;
     }
 
     MessageRow.incoming .bubble {
@@ -531,10 +498,6 @@ class TuiApp(App):
         background: $surface-dark;
         color: $primary;
         border-right: thick $accent;
-    }
-
-    .bubble:hover {
-        background: $surface;
     }
 
     .thread-unread { color: $warning; }
@@ -558,12 +521,6 @@ class TuiApp(App):
     #compose-text { margin: 1; }
     #contacts-filter { margin: 1; }
     #contacts-list { height: 1fr; }
-
-    /* Link styling for clickable URLs in messages */
-    $link-color: #e0553d;
-    $link-style: underline;
-    $link-color-hover: #ff6b52;
-    $link-style-hover: bold underline;
     """
 
     BINDINGS = [
@@ -924,6 +881,14 @@ class TuiApp(App):
 
     def action_quit(self) -> None:
         self.app.exit()
+
+    def action_open_url(self, url: str) -> None:
+        """Open a URL in the default browser. Called from inline [@click] links."""
+        subprocess.Popen(
+            ["xdg-open", url],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def run_tui(*, headless: bool = True, interval: float = 30.0) -> None:
