@@ -12,6 +12,7 @@ import json
 import os
 import queue
 import re
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -20,6 +21,7 @@ from typing import Any, Callable
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.events import Click
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
@@ -136,7 +138,11 @@ class BrowserWorker:
 class MessageRow(Horizontal):
     """A single message bubble: incoming left, outgoing right."""
 
-    def __init__(self, message: dict) -> None:
+    _URL_RE = re.compile(
+        r"(https?://[^\s)]+|www\.[^\s)]+)"
+    )
+
+    def __init__(self, message: dict):
         super().__init__(classes=f"row {message.get('direction', 'incoming')}")
         self.message = message
 
@@ -145,11 +151,27 @@ class MessageRow(Horizontal):
         who = self.message.get("participant") or "unknown"
         text = self.message.get("text") or ""
         ts = self.message.get("timestamp") or ""
+        # Wrap URLs in Rich link markup so they become clickable.
+        text = self._URL_RE.sub(r"[link=\g<0>]\g<0>[/link]", text)
         content = f"{text}\n[dim]{ts}[/]" if not incoming else f"{who}\n{text}\n[dim]{ts}[/]"
         bubble = Static(content, classes="bubble")
         spacer = Static("", classes="spacer")
         if incoming:
             yield bubble
+            yield spacer
+        else:
+            yield spacer
+            yield bubble
+
+    def on_click(self, event: Click) -> None:
+        """Open the first URL found in the message."""
+        text = self.message.get("text") or ""
+        match = self._URL_RE.search(text)
+        if match:
+            url = match.group(0)
+            if url.startswith("www."):
+                url = "https://" + url
+            subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             yield spacer
         else:
             yield spacer
