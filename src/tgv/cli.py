@@ -193,6 +193,10 @@ def build_parser() -> argparse.ArgumentParser:
     tui_cmd.add_argument(
         "--interval", type=float, default=30.0, help="seconds between polls"
     )
+    tui_cmd.add_argument(
+        "--verbose", action="store_true", default=False,
+        help="print debug logs to stderr",
+    )
 
     sub.add_parser(
         "tui-login", help="sign in to the TUI's separate browser profile (one-time)"
@@ -349,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "tui":
         from . import tui as tui_module
 
-        tui_module.run_tui(headless=not args.headed, interval=args.interval)
+        tui_module.run_tui(headless=not args.headed, interval=args.interval, verbose=args.verbose)
         return 0
 
     if args.command == "watchdog":

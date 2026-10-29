@@ -102,6 +102,7 @@ tgv watch --json         # print notifications as JSON
 tgv tui                  # open the interactive terminal UI
 tgv tui --headed         # show the browser window
 tgv tui --interval 15    # poll every 15 seconds
+tgv tui --verbose        # print debug logs to stderr
 ```
 
 Layout: sidebar (conversations) on the left, messages on the right, a compose

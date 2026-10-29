@@ -535,11 +535,12 @@ class TuiApp(App):
         ("escape", "focus_sidebar", "Back to list"),
     ]
 
-    def __init__(self, *, headless: bool = True, interval: float = 30.0) -> None:
+    def __init__(self, *, headless: bool = True, interval: float = 30.0, verbose: bool = False) -> None:
         super().__init__()
         self._worker: BrowserWorker | None = None
         self._headless = headless
         self._interval = interval
+        self._verbose = verbose
         self._threads: list[dict] = []
         self._selected: int | None = None
         self._selected_id: str | None = None
@@ -628,7 +629,11 @@ class TuiApp(App):
 
     def _focus_sidebar(self) -> None:
         try:
-            self.query_one("#sidebar").focus()
+            sidebar = self.query_one("#sidebar")
+            if self.compose_has_focus():
+                self._dbg("skip sidebar focus — compose box active")
+            else:
+                sidebar.focus()
         except NoMatches:
             pass
 
@@ -639,6 +644,7 @@ class TuiApp(App):
     @work(thread=True)
     def refresh_threads(self) -> None:
         assert self._worker is not None
+        self._dbg("refresh_threads start")
         try:
             threads = self._worker.call(reader.list_threads, limit=100)
         except Exception as exc:  # noqa: BLE001
@@ -656,7 +662,9 @@ class TuiApp(App):
     def _set_threads(self, threads: list[dict]) -> None:
         # Skip rebuild if nothing changed — preserves the highlight.
         if threads == self._threads:
+            self._dbg("refresh_threads: no change")
             return
+        self._dbg(f"refresh_threads: {len(threads)} threads")
         self._threads = threads
         try:
             sidebar = self.query_one("#sidebar", ThreadList)
@@ -707,7 +715,10 @@ class TuiApp(App):
             return
         if idx < len(sidebar.children):
             sidebar.index = idx
-            sidebar.focus()
+            if self.compose_has_focus():
+                self._dbg("skip sidebar focus — compose box active")
+            else:
+                sidebar.focus()
         self._update_compose_recipient()
 
     @work(thread=True)
@@ -731,7 +742,10 @@ class TuiApp(App):
         self.call_after_refresh(self._restore_message_focus)
 
     def _restore_message_focus(self) -> None:
-        self.query_one("#sidebar", ThreadList).focus()
+        if self.compose_has_focus():
+            self._dbg("skip sidebar focus — compose box active")
+        else:
+            self.query_one("#sidebar", ThreadList).focus()
 
     def _update_compose_recipient(self) -> None:
         """Update the recipient display in the compose bar."""
@@ -773,10 +787,12 @@ class TuiApp(App):
     # -- events ------------------------------------------------------------ #
     def on_list_view_selected(self, event: ListView.Selected) -> None:
         if self._rebuilding:
+            self._dbg(f"select ignored (rebuilding): idx={event.index}")
             return
         self._selected = event.index
         thread = self._threads[event.index] if event.index < len(self._threads) else {}
         self._selected_id = clean(thread.get("participant")) or None
+        self._dbg(f"select: idx={event.index} participant={self._selected_id}")
         self._update_compose_recipient()
         self.load_thread(event.index)
 
@@ -818,12 +834,14 @@ class TuiApp(App):
     @work(thread=True)
     def poll(self) -> None:
         assert self._worker is not None
+        self._dbg("poll tick")
         try:
             now_ms = time.time() * 1000
             since_ms = max(1.0, now_ms - self._last_ts)
             messages = self._worker.call(reader.messages_since, since_ms, now_ms=now_ms)
             if messages:
                 self._last_ts = max(m["_ts"] for m in messages)
+                self._dbg(f"poll: {len(messages)} new message(s)")
         except Exception:  # noqa: BLE001
             return
         self.call_from_thread(self.refresh_threads)
@@ -875,6 +893,12 @@ class TuiApp(App):
                 break
         return False
 
+    def _dbg(self, msg: str) -> None:
+        """Print a debug message to stderr when verbose mode is enabled."""
+        if self._verbose:
+            import sys
+            print(f"[tgv] {msg}", file=sys.stderr, flush=True)
+
     def action_help(self) -> None:
         self.push_screen(HelpScreen())
 
@@ -906,5 +930,5 @@ class TuiApp(App):
         )
 
 
-def run_tui(*, headless: bool = True, interval: float = 30.0) -> None:
-    TuiApp(headless=headless, interval=interval).run()
+def run_tui(*, headless: bool = True, interval: float = 30.0, verbose: bool = False) -> None:
+    TuiApp(headless=headless, interval=interval, verbose=verbose).run()
