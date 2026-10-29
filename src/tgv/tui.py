@@ -39,14 +39,20 @@ from rich.markup import escape as escape_markup
 class BrowserWorker:
     """Owns the Playwright page in a dedicated thread."""
 
-    def __init__(self, profile_dir: Path | None = None, headless: bool = True) -> None:
+    def __init__(self, profile_dir: Path | None = None, headless: bool = True, verbose: bool = False) -> None:
         self._profile_dir = profile_dir or config.TUI_PROFILE_DIR
         self._headless = headless
+        self._verbose = verbose
         self._requests: queue.Queue = queue.Queue()
         self._responses: dict[str, tuple[str, Any]] = {}
         self._lock = threading.Lock()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    def _dbg(self, msg: str) -> None:
+        if self._verbose:
+            import sys
+            print(f"[worker] {msg}", file=sys.stderr, flush=True)
 
     def _update_state(self, task: str | None = None, **extra) -> None:
         """Write current worker state to disk for monitoring."""
@@ -83,28 +89,41 @@ class BrowserWorker:
                         if item is None:
                             break
                         req_id, fn, args, kwargs = item
+                        self._dbg(f"dequeue {req_id[:20]}... fn={fn.__name__} queue_depth={self._requests.qsize()}")
                         self._update_state(task=fn.__name__)
                         try:
                             result = fn(page, *args, **kwargs)
                             with self._lock:
                                 self._responses[req_id] = ("ok", result)
+                            self._dbg(f"done {req_id[:20]}... fn={fn.__name__}")
                         except Exception as exc:  # noqa: BLE001
+                            self._dbg(f"error {req_id[:20]}... fn={fn.__name__}: {exc!r}")
                             with self._lock:
                                 self._responses[req_id] = ("err", exc)
                         self._update_state(task="idle")
                 finally:
                     context.close()
         except Exception as exc:  # noqa: BLE001
+            self._dbg(f"worker thread fatal: {exc!r}")
             with self._lock:
                 self._responses["init"] = ("error", exc)
 
     def _wait_for(self, req_id: str, timeout: float = 30.0) -> tuple[str, Any]:
         """Wait for a worker response. Raises VoiceError if the worker dies."""
+        import sys
         deadline = time.monotonic() + timeout
+        warned_at = []
         while True:
             with self._lock:
                 if req_id in self._responses:
                     return self._responses.pop(req_id)
+            elapsed = time.monotonic() - (deadline - timeout)
+            if self._verbose:
+                for mark in (10, 20):
+                    if elapsed >= mark and mark not in warned_at:
+                        warned_at.append(mark)
+                        alive = self._thread.is_alive()
+                        print(f"[worker] still waiting after {mark}s (thread_alive={alive}, resp_count={len(self._responses)})", file=sys.stderr, flush=True)
             if time.monotonic() >= deadline:
                 raise VoiceError(
                     f"The browser worker did not respond within {timeout:g}s. "
@@ -121,6 +140,7 @@ class BrowserWorker:
 
     def call(self, fn: Callable, *args: Any, **kwargs: Any) -> Any:
         req_id = f"{threading.current_thread().ident}-{time.time_ns()}"
+        self._dbg(f"call {fn.__name__} → queue (depth={self._requests.qsize()})")
         self._requests.put((req_id, fn, args, kwargs))
         status, result = self._wait_for(req_id)
         if status == "err":
@@ -574,7 +594,7 @@ class TuiApp(App):
     @work(thread=True)
     def _start(self) -> None:
         try:
-            self._worker = BrowserWorker(headless=self._headless)
+            self._worker = BrowserWorker(headless=self._headless, verbose=self._verbose)
             self._worker.start()
         except AuthenticationRequiredError:
             self.call_from_thread(
