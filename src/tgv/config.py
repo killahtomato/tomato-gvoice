@@ -36,6 +36,7 @@ WATCHDOG_STATS = BASE_DIR / "watchdog_stats.json"
 
 # State file for the TUI BrowserWorker (monitoring).
 TUI_WORKER_STATE = BASE_DIR / "tui_worker_state.json"
+TUI_DEBUG_LOG = BASE_DIR / "tui_debug.log"
 
 # How long the cached contact map is trusted before it is refetched.
 CONTACTS_CACHE_TTL_SECONDS = 24 * 60 * 60

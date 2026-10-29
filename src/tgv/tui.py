@@ -34,6 +34,21 @@ from rich.markup import escape as escape_markup
 
 
 # --------------------------------------------------------------------------- #
+# Logging helpers
+# --------------------------------------------------------------------------- #
+def _rotate_log(log_path: Path, max_lines: int = 500) -> None:
+    """Keep a log file from growing beyond `max_lines` lines."""
+    try:
+        with log_path.open("r", encoding="utf-8") as f:
+            lines = f.readlines()
+        if len(lines) > max_lines:
+            with log_path.open("w", encoding="utf-8") as f:
+                f.writelines(lines[-max_lines:])
+    except OSError:
+        pass
+
+
+# --------------------------------------------------------------------------- #
 # Browser worker
 # --------------------------------------------------------------------------- #
 class BrowserWorker:
@@ -52,7 +67,17 @@ class BrowserWorker:
     def _dbg(self, msg: str) -> None:
         if self._verbose:
             import sys
-            print(f"[worker] {msg}", file=sys.stderr, flush=True)
+            from datetime import datetime
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            line = f"[{ts}] [worker] {msg}"
+            print(line, file=sys.stderr, flush=True)
+            try:
+                config.TUI_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+                with config.TUI_DEBUG_LOG.open("a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                _rotate_log(config.TUI_DEBUG_LOG)
+            except OSError:
+                pass
 
     def _update_state(self, task: str | None = None, **extra) -> None:
         """Write current worker state to disk for monitoring."""
@@ -123,7 +148,7 @@ class BrowserWorker:
                     if elapsed >= mark and mark not in warned_at:
                         warned_at.append(mark)
                         alive = self._thread.is_alive()
-                        print(f"[worker] still waiting after {mark}s (thread_alive={alive}, resp_count={len(self._responses)})", file=sys.stderr, flush=True)
+                        self._dbg(f"still waiting after {mark}s (thread_alive={alive}, resp_count={len(self._responses)})")
             if time.monotonic() >= deadline:
                 raise VoiceError(
                     f"The browser worker did not respond within {timeout:g}s. "
@@ -914,10 +939,20 @@ class TuiApp(App):
         return False
 
     def _dbg(self, msg: str) -> None:
-        """Print a debug message to stderr when verbose mode is enabled."""
+        """Write a debug message to file and stderr when verbose mode is enabled."""
         if self._verbose:
             import sys
-            print(f"[tgv] {msg}", file=sys.stderr, flush=True)
+            from datetime import datetime
+            ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
+            line = f"[{ts}] [tgv] {msg}"
+            print(line, file=sys.stderr, flush=True)
+            try:
+                config.TUI_DEBUG_LOG.parent.mkdir(parents=True, exist_ok=True)
+                with config.TUI_DEBUG_LOG.open("a", encoding="utf-8") as f:
+                    f.write(line + "\n")
+                _rotate_log(config.TUI_DEBUG_LOG)
+            except OSError:
+                pass
 
     def action_help(self) -> None:
         self.push_screen(HelpScreen())
