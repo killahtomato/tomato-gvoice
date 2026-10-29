@@ -555,7 +555,7 @@ class TuiApp(App):
         ("escape", "focus_sidebar", "Back to list"),
     ]
 
-    def __init__(self, *, headless: bool = True, interval: float = 30.0, verbose: bool = False) -> None:
+    def __init__(self, *, headless: bool = True, interval: float = 12.0, verbose: bool = False) -> None:
         super().__init__()
         self._worker: BrowserWorker | None = None
         self._headless = headless
@@ -950,5 +950,5 @@ class TuiApp(App):
         )
 
 
-def run_tui(*, headless: bool = True, interval: float = 30.0, verbose: bool = False) -> None:
+def run_tui(*, headless: bool = True, interval: float = 12.0, verbose: bool = False) -> None:
     TuiApp(headless=headless, interval=interval, verbose=verbose).run()

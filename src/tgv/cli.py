@@ -191,7 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="run the browser in a visible window",
     )
     tui_cmd.add_argument(
-        "--interval", type=float, default=30.0, help="seconds between polls"
+        "--interval", type=float, default=12.0, help="seconds between polls"
     )
     tui_cmd.add_argument(
         "--verbose", action="store_true", default=False,

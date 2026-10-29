@@ -101,7 +101,7 @@ tgv watch --json         # print notifications as JSON
 ```bash
 tgv tui                  # open the interactive terminal UI
 tgv tui --headed         # show the browser window
-tgv tui --interval 15    # poll every 15 seconds
+tgv tui --interval 12    # poll every 12 seconds
 tgv tui --verbose        # print debug logs to stderr
 ```
 
